@@ -18,16 +18,16 @@ Good implementation plans are shaped as much by what not to do as by what to do.
 
 kkt makes those limits explicit. Before choosing an implementation path, it pushes the agent to identify the constraints that define a safe change: public contracts that must not break, architecture boundaries that must not be crossed, data rules that must not be weakened, and validation that must not be skipped.
 
-That changes the planning loop from:
+Instead of:
 
 ```text
-what can we build?
+build xyz
 ```
 
-to:
+model the work as:
 
 ```text
-what is the best feasible change,
+what is the optimized implementation,
 given what must stay true?
 ```
 
