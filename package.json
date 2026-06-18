@@ -1,0 +1,29 @@
+{
+  "name": "@kkt/skills",
+  "version": "0.1.0",
+  "description": "KKT constrained-optimization skills for coding agents.",
+  "type": "module",
+  "bin": {
+    "kkt-skills": "bin/kkt-skills.mjs"
+  },
+  "files": [
+    "assets/",
+    "bin/",
+    "skills/",
+    "scripts/",
+    "README.md"
+  ],
+  "keywords": [
+    "agent-skills",
+    "codex",
+    "claude-code",
+    "opencode",
+    "pi-package",
+    "coding-agent",
+    "constrained-optimization"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  }
+}
