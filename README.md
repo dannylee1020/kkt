@@ -5,18 +5,33 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img alt="version: 0.1.0" src="https://img.shields.io/badge/version-0.1.0-2563eb.svg"></a>
   <a href="package.json"><img alt="license: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-16a34a.svg"></a>
   <a href="package.json"><img alt="node >=22" src="https://img.shields.io/badge/node-%3E%3D22-f97316.svg"></a>
 </p>
 
 <hr style="width: 100%; border: 0; border-top: 2px solid #e5e7eb;">
 
+kkt applies [constrained optimization](https://en.wikipedia.org/wiki/Constrained_optimization) to coding-agent workflows. Named after the [Karush-Kuhn-Tucker conditions](https://en.wikipedia.org/wiki/Karush%E2%80%93Kuhn%E2%80%93Tucker_conditions), it translates mathematical modeling discipline into a practical framework for identifying application constraints, choosing feasible implementation paths, and validating the result.
+
 ## Why kkt
+Good implementation plans are shaped as much by what not to do as by what to do.
 
-kkt applies constrained optimization to coding-agent workflows. Named after the Karush-Kuhn-Tucker conditions, it translates mathematical modeling discipline into a practical framework for identifying application constraints, choosing feasible implementation paths, and validating the result.
+kkt makes those limits explicit. Before choosing an implementation path, it pushes the agent to identify the constraints that define a safe change: public contracts that must not break, architecture boundaries that must not be crossed, data rules that must not be weakened, and validation that must not be skipped.
 
-kkt is distributed as portable Agent Skills: plain `SKILL.md` instructions plus local references. It is designed to work across Codex, Claude Code, Pi, and OpenCode without vendor-specific skill metadata.
+That changes the planning loop from:
+
+```text
+what can we build?
+```
+
+to:
+
+```text
+what is the best feasible change,
+given what must stay true?
+```
+
+The result is a more disciplined implementation plan: fewer accidental side effects, clearer tradeoffs, smaller edits, and validation tied to the actual constraints of the work.
 
 For coding agents, those constraints are usually concrete:
 
