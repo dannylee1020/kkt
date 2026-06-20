@@ -4,36 +4,72 @@ Use this reference for KKT, KKT Loop, and KKT Model workflows. The point is not 
 
 ## Request Intake
 
-Start by translating rough user input into a request frame. Do not require the user to pre-write a complete KKT request.
+Start by translating rough user input into a compact intent frame, then let discovery fill in repo facts, constraints, and validation paths. Do not require the user to pre-write a complete KKT request.
 
-Capture:
+Capture user meaning first:
 
 ```yaml
 request_intake:
-  feature_or_problem:
-    value:
-    confidence: explicit | inferred | assumption | unknown
-  known_non_goals:
-    value:
-    confidence: explicit | inferred | assumption | unknown
-  hard_constraints:
-    value:
-    confidence: explicit | inferred | assumption | unknown
-  validation_expectations:
-    value:
-    confidence: explicit | inferred | assumption | unknown
+  intent:
+    user_goal:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    desired_behavior:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    user_visible_success:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    scope_boundary:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    examples:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    priority_signals:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    explicit_user_constraints:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    ambiguity_log:
+      value:
+      confidence: explicit | inferred | assumption | unknown
+    can_continue_to_discovery:
+      value: true | false
+      confidence: explicit | inferred | assumption | unknown
   execution_mode:
     value: implement | loop | model_only
     confidence: explicit | inferred | assumption | unknown
 ```
 
+Discovery adds repo-grounded intake:
+
+```yaml
+request_intake:
+  discovery:
+    repo_facts:
+      value:
+      confidence: observed | inferred | assumption | unknown
+    discovered_constraints:
+      value:
+      confidence: observed | inferred | assumption | unknown
+    validation_paths:
+      value:
+      confidence: observed | inferred | assumption | unknown
+    remaining_unknowns:
+      value:
+      confidence: observed | inferred | assumption | unknown
+```
+
 Use this intake process before modeling:
 
 1. Parse explicit user statements first.
-2. Inspect relevant repo context to infer discoverable constraints, validation paths, and likely non-goals.
-3. Label each intake field as explicit, inferred, assumption, or unknown.
-4. Ask the user only when an unknown materially changes feasibility, product behavior, risk, or execution mode.
-5. Otherwise proceed with conservative assumptions and carry them into the model.
+2. Ask only the smallest useful set of meaning-focused questions before discovery.
+3. Inspect relevant repo context to infer discoverable constraints, validation paths, and likely technical non-goals.
+4. Label intent fields as explicit, inferred, assumption, or unknown; label discovery fields as observed, inferred, assumption, or unknown.
+5. Ask the user only when an unknown materially changes product meaning, feasibility, risk, scope, or execution mode.
+6. Otherwise proceed with conservative assumptions and carry them into the model.
 
 Default execution modes:
 
@@ -41,7 +77,7 @@ Default execution modes:
 - KKT Loop: `loop`.
 - KKT Model: `model_only`.
 
-Do not ask the user to identify files, routes, schemas, tests, or config that can be discovered locally.
+Do not ask the user to identify files, routes, schemas, tests, validation commands, or config that can be discovered locally.
 
 ## Mathematical Translation
 
@@ -62,12 +98,32 @@ Use mathematical modeling semantics:
 - Binding constraints are solution-audit findings: active or limiting constraints that explain why the selected solution has its shape.
 - Validation is an execution certificate, not a vibes-based summary.
 
+## Method Profiles
+
+Choose the smallest modeling profile that fits the skill and request:
+
+- Daily profile (`kkt`): use compact intake, discovery facts, hard-constraint feasibility, lexicographic ranking, approval before implementation, and validation certificate. Keep formal method names mostly hidden unless they explain a material tradeoff.
+- Deep profile (`kkt-model`): use the layered method catalog for intent capture, discovery, coupling, method selection, candidate comparison, and user tradeoff decisions.
+- Loop profile (`kkt-loop`): front-load deeper planning, show the final model for approval, then create durable workspace files and execute with evidence-backed continuation.
+
+Use `references/layered-modeling-methods.md` when the request needs method selection beyond the daily profile.
+
+## State Persistence Tiers
+
+Use `references/state-contract.md` as the authoritative state contract.
+
+- Daily tier (`kkt`): no durable files by default. If state is needed, use one compact `kkt.yaml`; do not create Markdown layer artifacts.
+- Model tier (`kkt-model`): use `.kkt-model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, and `model.md` when the model needs durable context.
+- Loop tier (`kkt-loop`): use `.kkt/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md`.
+
+YAML carries canonical state, status, decisions, method invocations, and artifact references. Markdown carries rich context that would become lossy if compressed into YAML.
+
 ## Optimization Model
 
 ```yaml
 optimization_model:
   request_intake:
-    The user's rough request translated into feature/problem, non-goals, hard constraints, validation expectations, and execution mode.
+    User meaning plus discovered repo facts, discovered constraints, validation paths, and execution mode.
 
   objective:
     The outcome to optimize for.
@@ -106,7 +162,23 @@ optimization_model:
     What would change if a binding constraint were relaxed.
 ```
 
-`request_intake.validation_expectations` is user intent. Translate it into the execution contract before implementation.
+`request_intake.intent.user_visible_success` is user meaning, not a validation command. Discovery and modeling translate it into acceptance criteria, validation plan, and evidence required before implementation.
+
+## Implementation Approval Gate
+
+For implementation modes (`implement` and `loop`), show the final modeling result and wait for explicit user approval before mutating files, creating a durable workspace, launching a goal, or starting execution.
+
+The modeling result must include:
+
+- objective;
+- selected plan;
+- rejected alternatives or infeasible paths when relevant;
+- binding constraints;
+- expected files, modules, surfaces, or workflow areas to touch;
+- validation plan;
+- residual risk.
+
+If the user changes the model, re-optimize before asking for approval again.
 
 ## Execution Contract
 
@@ -166,7 +238,7 @@ Common variables:
 
 Hard constraints:
 
-- user non-goals;
+- explicit user constraints and scope boundaries;
 - security and privacy requirements;
 - public API compatibility;
 - data integrity;

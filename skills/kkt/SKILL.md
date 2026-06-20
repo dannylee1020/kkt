@@ -1,6 +1,6 @@
 ---
 name: kkt
-description: Constrained optimization workflow for ordinary coding requests. Use when a coding agent should translate rough user input into a request frame, infer missing non-goals, constraints, validation expectations, and execution mode, build a mathematical-style optimization model, derive an execution contract, select a feasible implementation plan, execute the change, validate with evidence, and finish with a constraint audit.
+description: Constrained optimization workflow for ordinary coding requests. Use when a coding agent should capture user meaning, discover repo constraints and validation paths, build a mathematical-style optimization model, derive an execution contract, select a feasible implementation plan, execute the change, validate with evidence, and finish with a constraint audit.
 license: Apache-2.0
 ---
 
@@ -8,18 +8,19 @@ license: Apache-2.0
 
 Use this skill for normal coding work that benefits from stricter planning than default plan mode. Apply Karush-Kuhn-Tucker-inspired constrained modeling as a discipline, not as numeric optimization.
 
-Read `references/feature-optimization-model.md` before acting.
+Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and the internal `references/layers/` contracts only when the request needs method selection beyond the daily profile.
 
 ## Core Rule
 
-Intake before modeling. Model before editing. Derive an execution contract before changing code. Finish only with validation evidence or an explicit blocker.
+Intake before modeling. Model before editing. Show the final modeling result and get explicit user approval before implementation. Derive an execution contract before changing code. Finish only with validation evidence or an explicit blocker.
 
 ## Workflow
 
-1. Translate the user's rough input into a request frame: feature or problem, known non-goals, hard constraints, validation expectations, and execution mode.
-2. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues to infer discoverable intake fields before forming the model.
-3. Separate explicit user statements, discovered facts, inferred constraints, assumptions, and unknowns. Ask only when a high-impact product choice or infeasible ambiguity remains.
-4. Build a compact optimization model:
+1. Translate the user's rough input into an intent frame: user goal, desired behavior, user-visible success, scope boundary, priority signals, examples, and explicit user constraints.
+2. Ask only the smallest useful set of meaning-focused questions; do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
+3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues to discover repo facts, constraints, validation paths, and likely technical non-goals before forming the model.
+4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, and unknowns. Ask only when a high-impact product choice or infeasible ambiguity remains.
+5. Build a compact optimization model using the daily profile:
    - request intake;
    - objective;
    - system state;
@@ -29,28 +30,33 @@ Intake before modeling. Model before editing. Derive an execution contract befor
    - selected plan;
    - selected-plan binding audit;
    - sensitivity analysis.
-5. Derive a compact execution contract:
+6. Derive a compact execution contract:
    - acceptance criteria;
    - validation plan;
    - evidence required;
    - stop conditions.
-6. Eliminate infeasible plans before comparing feasible plans.
-7. Select the best feasible plan by lexicographic objective order:
+7. Eliminate infeasible plans before comparing feasible plans.
+8. Select the best feasible plan by lexicographic objective order:
    1. satisfy the user request;
    2. preserve correctness, security, data integrity, and public contracts;
    3. minimize blast radius;
    4. match existing architecture and conventions;
    5. improve maintainability where cheap;
    6. prefer validation clarity over elegance.
-8. Execute the selected plan with focused edits.
-9. Validate against the optimization model and execution contract.
-10. End with a short constraint audit.
+9. Show the final modeling result and wait for explicit user approval before implementation.
+10. Execute the approved plan with focused edits.
+11. Validate against the optimization model and execution contract.
+12. End with a short constraint audit.
 
 ## Output Discipline
 
 For small tasks, keep the model brief. Do not create durable files unless the user asks, the task becomes long-running, or `$kkt-loop` is more appropriate.
 
-Before implementation, expose the request frame or model only when useful for user steering or when the task has material tradeoffs. Otherwise keep it as working structure and proceed.
+When durable state is useful for normal `$kkt` work, use the daily tier from `references/state-contract.md`: a single `kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Do not create Markdown layer artifacts in the daily tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
+
+The intent, discovery, modeling, execution, and validation layers are internal contract boundaries, not user-facing skills. Run them inside this skill when needed; do not ask the user to invoke layer names directly.
+
+Before implementation, always expose a concise modeling result and ask for approval. Include the objective, selected plan, relevant rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 
 Use this final shape:
 
@@ -71,6 +77,7 @@ If execution discovers a fact that invalidates the selected plan, pause implemen
 Stop and ask the user before continuing when:
 
 - no feasible plan satisfies the hard constraints;
+- the user does not approve the final modeling result;
 - a destructive action is required;
 - credentials, secrets, external access, or paid services are required;
 - multiple feasible plans differ mainly by product intent;
@@ -80,6 +87,7 @@ Stop and ask the user before continuing when:
 
 - Do not use fake numeric scores for subjective qualities.
 - Do not treat the first plausible plan as selected before feasibility checks.
+- Do not edit files before the final modeling result is explicitly approved.
 - Do not follow existing project patterns silently when they appear wrong; flag the issue.
 - Do not make broad refactors unless the model shows they are necessary.
 - Do not finish without validation evidence or an explicit statement that validation could not be run.

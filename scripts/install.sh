@@ -7,8 +7,10 @@ kkt installer
 
 Usage:
   scripts/install.sh [installer options]
+  scripts/install.sh upgrade [installer options]
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- [installer options]
+  curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade [installer options]
   curl -fsSL <install.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [installer options]
 
 Installer options are passed to bin/kkt-skills.mjs.
@@ -19,6 +21,10 @@ Common options:
   --dir <path>      Install to an explicit skill root directory.
   --force           Overwrite existing KKT skill directories.
   --dry-run         Print operations without writing files.
+
+Commands:
+  install           Install missing skills; conflicts if an existing skill differs.
+  upgrade           Remove known old KKT skill directories, then install the latest skills.
 
 Default install writes to:
   ~/.agents/skills
@@ -104,7 +110,14 @@ main() {
   need_command node
   local root
   root="$(resolve_root)"
-  node "$root/bin/kkt-skills.mjs" install "$@"
+  case "${1:-}" in
+    install|upgrade|uninstall|doctor)
+      node "$root/bin/kkt-skills.mjs" "$@"
+      ;;
+    *)
+      node "$root/bin/kkt-skills.mjs" install "$@"
+      ;;
+  esac
 }
 
 main "$@"

@@ -76,6 +76,12 @@ Install with curl:
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
+Upgrade an existing install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade
+```
+
 By default, this installs the skills for Codex, Claude Code, Pi, and OpenCode using their shared skill locations:
 
 ```text
@@ -83,13 +89,13 @@ By default, this installs the skills for Codex, Claude Code, Pi, and OpenCode us
 ~/.claude/skills
 ```
 
-Target-specific paths are also available for agents that prefer their own skill directory:
+Target-specific installs use the same shared path for Codex, Pi, and OpenCode:
 
 ```text
 Codex:       ~/.agents/skills
 Claude Code: ~/.claude/skills
-Pi:          ~/.pi/agent/skills
-OpenCode:    ~/.config/opencode/skills
+Pi:          ~/.agents/skills
+OpenCode:    ~/.agents/skills
 ```
 
 Useful options:
@@ -100,6 +106,7 @@ Useful options:
 --target pi
 --target opencode
 --local
+--force
 --dry-run
 ```
 
@@ -107,6 +114,7 @@ From a checkout:
 
 ```bash
 scripts/install.sh
+scripts/install.sh upgrade
 ```
 
 ## Quick Start
@@ -161,32 +169,38 @@ user request
   -> request intake
   -> constraint discovery
   -> feasible region
-  -> selected plan
+  -> optimization modeling with top N plans.
+  -> approval
   -> focused edits
   -> validation certificate
-```
-
-The contract:
-
-```text
-optimization model   objective, variables, constraints, feasible region, selected plan
-solution audit       binding constraints and sensitivity analysis
-execution contract   acceptance criteria, validation plan, evidence, stop conditions
 ```
 
 ## Skills
 
 | skill | use it for | output |
 | --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | model, implement, validate |
-| `$kkt-loop` | long-running or autonomous work | durable workspace, progress, evidence |
+| `$kkt` | normal feature work, bug fixes, and refactors | lightweight model, approval, implementation, validation |
+| `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence |
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief |
 
-`$kkt` is lightweight and does not create durable files by default.
+`$kkt` is lightweight and does not create durable files by default. It shows the selected model for approval before editing.
+
+Persistence tiers:
+
+| tier | skill | durable state |
+| --- | --- | --- |
+| daily | `$kkt` | none by default; optional compact `kkt.yaml` for small state handoff |
+| model | `$kkt-model` | `.kkt-model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` |
+| loop | `$kkt-loop` | `.kkt/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` |
+
+`kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail.
 
 `$kkt-loop` creates `.kkt/<slug>/` with:
 
 ```text
+kkt.yaml
+intent.md
+discovery.md
 model.md
 plan.md
 evidence.md
@@ -194,20 +208,25 @@ progress.md
 notes.md
 ```
 
+It plans first, asks for approval, then creates the workspace and executes through the durable loop.
+
 `$kkt-model` is non-mutating by default. It inspects, models, compares feasible alternatives, and asks for user input only when the tradeoff cannot be resolved from the repo.
+
+Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while daily `$kkt` stays compact.
 
 ## Request Shape
 
-kkt turns rough input into a request frame before modeling:
+kkt turns rough input into an intent frame before modeling:
 
 ```text
-objective
-known non-goals
-constraints
-validation expectations
+user goal
+desired behavior
+user-visible success
+scope boundary
+explicit user constraints
 ```
 
-The user does not need to provide all of this upfront. Missing fields are inferred from the codebase when possible and marked as assumptions when needed.
+The user does not need to provide all of this upfront. Repo constraints, affected files, and validation paths are discovered from the codebase when possible and marked as assumptions when needed.
 
 Expected final audit:
 

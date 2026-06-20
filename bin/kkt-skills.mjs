@@ -16,12 +16,25 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 const sourceSkillsRoot = path.join(packageRoot, "skills");
-const skillNames = ["kkt", "kkt-loop", "kkt-model"];
+const skillNames = [
+  "kkt",
+  "kkt-loop",
+  "kkt-model",
+];
+
+const legacySkillNames = [
+  "kkt-intent",
+  "kkt-discovery",
+  "kkt-modeling",
+  "kkt-execution",
+  "kkt-validation",
+];
 
 const usageText = `KKT skills installer
 
 Usage:
   kkt-skills install [options]
+  kkt-skills upgrade [options]
   kkt-skills uninstall [options]
   kkt-skills doctor
 
@@ -36,6 +49,9 @@ Options:
 Default install:
   kkt-skills install
 
+Clean upgrade:
+  kkt-skills upgrade
+
 Installs to:
   ~/.agents/skills   (Codex, Pi, OpenCode shared location)
   ~/.claude/skills   (Claude Code location)
@@ -46,18 +62,20 @@ Examples:
   kkt-skills install --target pi
   kkt-skills install --target opencode --local .
   kkt-skills install --target codex --dir /tmp/kkt-skills --dry-run
+  kkt-skills upgrade --target codex
 `;
 
 function parseArgs(argv) {
+  const firstArg = argv[0];
   const args = {
-    command: argv[0] || "help",
+    command: !firstArg || firstArg === "--help" || firstArg === "-h" ? "help" : firstArg,
     target: "default",
     local: false,
     localPath: process.cwd(),
     dir: undefined,
     force: false,
     dryRun: false,
-    help: false,
+    help: firstArg === "--help" || firstArg === "-h",
   };
 
   for (let i = 1; i < argv.length; i += 1) {
@@ -109,29 +127,17 @@ function expandHome(value) {
   return value;
 }
 
-function xdgConfigHome() {
-  return process.env.XDG_CONFIG_HOME
-    ? expandHome(process.env.XDG_CONFIG_HOME)
-    : path.join(homedir(), ".config");
-}
-
 function resolveRoot(candidate) {
   return path.resolve(expandHome(candidate));
 }
 
 function nativeRoot(target, local, localPath) {
   const projectRoot = resolveRoot(localPath);
-  if (target === "codex") {
+  if (target === "codex" || target === "pi" || target === "opencode") {
     return local ? path.join(projectRoot, ".agents", "skills") : path.join(homedir(), ".agents", "skills");
   }
   if (target === "claude") {
     return local ? path.join(projectRoot, ".claude", "skills") : path.join(homedir(), ".claude", "skills");
-  }
-  if (target === "pi") {
-    return local ? path.join(projectRoot, ".pi", "skills") : path.join(homedir(), ".pi", "agent", "skills");
-  }
-  if (target === "opencode") {
-    return local ? path.join(projectRoot, ".opencode", "skills") : path.join(xdgConfigHome(), "opencode", "skills");
   }
   throw new Error(`Unsupported native target: ${target}`);
 }
@@ -241,7 +247,7 @@ function installToRoot(root, options) {
         continue;
       }
       if (!options.force) {
-        operations.push({ action: "conflict", source, target, reason: "target differs; rerun with --force" });
+        operations.push({ action: "conflict", source, target, reason: "target differs; run upgrade or rerun install with --force" });
         continue;
       }
       operations.push({ action: "overwrite", source, target });
@@ -274,13 +280,58 @@ function installToRoot(root, options) {
   return operations;
 }
 
+function knownInstalledSkillNames() {
+  return [...new Set([...skillNames, ...legacySkillNames])];
+}
+
+function upgradeToRoot(root, options) {
+  const operations = [];
+  for (const name of knownInstalledSkillNames()) {
+    const target = path.join(root, name);
+    operations.push({
+      action: existsSync(target) ? "remove" : "skip",
+      target,
+    });
+  }
+
+  for (const name of skillNames) {
+    operations.push({
+      action: "copy",
+      source: path.join(sourceSkillsRoot, name),
+      target: path.join(root, name),
+    });
+  }
+
+  if (!options.dryRun) {
+    mkdirSync(root, { recursive: true });
+    for (const operation of operations) {
+      if (operation.action === "remove") {
+        rmSync(operation.target, { recursive: true, force: true });
+      }
+    }
+    for (const operation of operations) {
+      if (operation.action === "copy") {
+        cpSync(operation.source, operation.target, { recursive: true });
+      }
+    }
+  }
+
+  return operations;
+}
+
 function printOperations(command, rootEntry, operations, dryRun) {
-  const prefix = dryRun ? "[dry-run]" : command === "uninstall" ? "[removed]" : "[installed]";
+  const prefix = dryRun
+    ? "[dry-run]"
+    : command === "uninstall"
+      ? "[removed]"
+      : command === "upgrade"
+        ? "[upgraded]"
+        : "[installed]";
   console.log(`${prefix} ${rootEntry.label}: ${rootEntry.root}`);
   for (const operation of operations) {
     const name = path.basename(operation.target);
     if (operation.action === "skip") {
-      console.log(`  - ${name}: already current`);
+      console.log(`  - ${name}: ${command === "upgrade" ? "not installed" : "already current"}`);
     } else if (operation.action === "conflict") {
       console.log(`  - ${name}: conflict`);
     } else {
@@ -290,7 +341,7 @@ function printOperations(command, rootEntry, operations, dryRun) {
 }
 
 function uninstallFromRoot(root, options) {
-  const operations = skillNames.map((name) => ({
+  const operations = knownInstalledSkillNames().map((name) => ({
     action: existsSync(path.join(root, name)) ? "remove" : "skip",
     target: path.join(root, name),
   }));
@@ -320,7 +371,14 @@ function invocationHints(entries) {
   const roots = new Set(entries.map((entry) => path.resolve(entry.root)));
   const hints = [];
 
-  if (labels.has("shared-global") || labels.has("shared-local") || labels.has("codex") || [...roots].some((root) => root.endsWith(`${path.sep}.agents${path.sep}skills`))) {
+  if (
+    labels.has("shared-global")
+    || labels.has("shared-local")
+    || labels.has("codex")
+    || labels.has("pi")
+    || labels.has("opencode")
+    || [...roots].some((root) => root.endsWith(`${path.sep}.agents${path.sep}skills`))
+  ) {
     hints.push("Codex: use $kkt, $kkt-loop, or $kkt-model");
     hints.push("Pi: use /skill:kkt, /skill:kkt-loop, or /skill:kkt-model");
     hints.push("OpenCode: use the skill tool with kkt, kkt-loop, or kkt-model");
@@ -328,13 +386,6 @@ function invocationHints(entries) {
   if (labels.has("claude-global") || labels.has("claude-local") || labels.has("claude") || [...roots].some((root) => root.endsWith(`${path.sep}.claude${path.sep}skills`))) {
     hints.push("Claude Code: use /kkt, /kkt-loop, or /kkt-model");
   }
-  if (labels.has("pi") || [...roots].some((root) => root.includes(`${path.sep}.pi${path.sep}`))) {
-    hints.push("Pi: use /skill:kkt, /skill:kkt-loop, or /skill:kkt-model");
-  }
-  if (labels.has("opencode") || [...roots].some((root) => root.includes(`${path.sep}opencode${path.sep}skills`) || root.endsWith(`${path.sep}.opencode${path.sep}skills`))) {
-    hints.push("OpenCode: use the skill tool with kkt, kkt-loop, or kkt-model");
-  }
-
   return [...new Set(hints)];
 }
 
@@ -361,7 +412,7 @@ function main() {
     return;
   }
 
-  if (!["install", "uninstall"].includes(args.command)) {
+  if (!["install", "upgrade", "uninstall"].includes(args.command)) {
     fail(`Unsupported command: ${args.command}`);
   }
 
@@ -374,6 +425,20 @@ function main() {
       printOperations("install", rootEntry, operations, args.dryRun);
     }
     if (process.exitCode) return;
+    const hints = invocationHints(roots);
+    if (hints.length > 0) {
+      console.log("");
+      console.log("Usage hints:");
+      for (const hint of hints) console.log(`- ${hint}`);
+    }
+    return;
+  }
+
+  if (args.command === "upgrade") {
+    for (const rootEntry of roots) {
+      const operations = upgradeToRoot(rootEntry.root, { dryRun: args.dryRun });
+      printOperations("upgrade", rootEntry, operations, args.dryRun);
+    }
     const hints = invocationHints(roots);
     if (hints.length > 0) {
       console.log("");
