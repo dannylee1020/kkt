@@ -328,15 +328,35 @@ function printOperations(command, rootEntry, operations, dryRun) {
         ? "[upgraded]"
         : "[installed]";
   console.log(`${prefix} ${rootEntry.label}: ${rootEntry.root}`);
-  for (const operation of operations) {
-    const name = path.basename(operation.target);
-    if (operation.action === "skip") {
-      console.log(`  - ${name}: ${command === "upgrade" ? "not installed" : "already current"}`);
-    } else if (operation.action === "conflict") {
-      console.log(`  - ${name}: conflict`);
-    } else {
-      console.log(`  - ${name}: ${operation.action}`);
-    }
+
+  const namesByAction = (action) => operations
+    .filter((operation) => operation.action === action)
+    .map((operation) => path.basename(operation.target));
+  const printSummary = (label, names) => {
+    if (names.length === 0) return;
+    console.log(`  - ${label}: ${names.join(", ")}`);
+  };
+
+  if (command === "upgrade") {
+    const removedLegacy = namesByAction("remove")
+      .filter((name) => legacySkillNames.includes(name));
+    printSummary("installed", skillNames);
+    printSummary("removed legacy", removedLegacy);
+    return;
+  }
+
+  const installed = namesByAction("copy");
+  const updated = namesByAction("overwrite");
+  const current = namesByAction("skip");
+  const conflicts = namesByAction("conflict");
+
+  printSummary("conflicts", conflicts);
+  if (conflicts.length > 0) return;
+
+  printSummary("installed", installed);
+  printSummary("updated", updated);
+  if (installed.length === 0 && updated.length === 0 && conflicts.length === 0) {
+    printSummary("already current", current);
   }
 }
 

@@ -131,24 +131,17 @@ OpenCode:    ask OpenCode to use the kkt skill
 Start with a rough request:
 
 ```text
-Use $kkt to add export-to-csv for reports.
+$kkt <feature to implement>
 ```
 
 Add constraints only when you already know them:
 
 ```text
-Use $kkt to add export-to-csv for reports.
+$kkt <feature to implement>
 
 Constraints:
-- Reuse the existing reports api.
-- Do not change billing code.
-- Do not add dependencies.
-
-Validation:
-- Add or update the smallest useful test.
-- Run the relevant test command if available.
+- <known constraint>
 ```
-
 kkt should inspect the repo, infer discoverable constraints, and ask only for decisions that materially affect feasibility, product behavior, risk, or execution mode.
 
 ## How It Works
