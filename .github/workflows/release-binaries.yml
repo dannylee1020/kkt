@@ -40,8 +40,8 @@ jobs:
           gh release create "$RELEASE_TAG" \
             --draft \
             --verify-tag \
-            --title "KKT $RELEASE_TAG" \
-            --notes "Binary assets for KKT $RELEASE_TAG."
+            --title "kkt $RELEASE_TAG" \
+            --notes "Binary assets for kkt $RELEASE_TAG."
 
   build:
     name: Build ${{ matrix.asset }}

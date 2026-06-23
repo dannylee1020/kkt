@@ -111,7 +111,7 @@ Install the CLI:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install-cli.sh | bash
-kkt init codex
+kkt init <agent>
 ```
 
 From a checkout:
