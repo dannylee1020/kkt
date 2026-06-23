@@ -84,32 +84,35 @@ func instructionContent(agent, command string) string {
 	if command == "" {
 		command = "kkt"
 	}
-	return fmt.Sprintf(`%s
-# KKT Workflow
-
-Use KKT as an advisory workflow tool for non-trivial coding work.
-
-Before implementation-heavy requests, run:
-
-`+"```bash"+`
-%s classify "<user request>"
-`+"```"+`
-
-If the decision is `+"`invoke`"+`, run the suggested start command, inspect the generated `.kkt/model/<run>/`, `.kkt/loop/<run>/`, or compact `.kkt/kkt.yaml` workspace, and follow its state contract.
-
-During KKT-managed work:
-
-- keep using this coding-agent session as the active coding agent;
-- do not spawn KKT subagents or assume detached harness behavior;
-- complete discovery before modeling;
-- show the selected model and get explicit approval before file edits;
-- for loop work, update `.kkt/loop/<run>/progress.md` and `.kkt/loop/<run>/evidence.md` as work proceeds;
-- run `+"`%s validate`"+` before the final response when a KKT workspace is active;
-- if KKT fails, continue normally and report the failure.
-
-Target integration: %s.
-%s
-`, instructionStart, command, command, agent, instructionEnd)
+	template := strings.Join([]string{
+		"%s",
+		"# KKT Workflow",
+		"",
+		"Use KKT as an advisory workflow tool for non-trivial coding work.",
+		"",
+		"Before implementation-heavy requests, run:",
+		"",
+		"```bash",
+		"%s classify \"<user request>\"",
+		"```",
+		"",
+		"If the decision is `invoke`, run the suggested start command, inspect the generated `.kkt/model/<run>/`, `.kkt/loop/<run>/`, or compact `.kkt/kkt.yaml` workspace, and follow its state contract.",
+		"",
+		"During KKT-managed work:",
+		"",
+		"- keep using this coding-agent session as the active coding agent;",
+		"- do not spawn KKT subagents or assume detached harness behavior;",
+		"- complete discovery before modeling;",
+		"- show the selected model and get explicit approval before file edits;",
+		"- for loop work, update `.kkt/loop/<run>/progress.md` and `.kkt/loop/<run>/evidence.md` as work proceeds;",
+		"- run `%s validate` before the final response when a KKT workspace is active;",
+		"- if KKT fails, continue normally and report the failure.",
+		"",
+		"Target integration: %s.",
+		"%s",
+		"",
+	}, "\n")
+	return fmt.Sprintf(template, instructionStart, command, command, agent, instructionEnd)
 }
 
 func WriteInstruction(path, content string) (bool, error) {
