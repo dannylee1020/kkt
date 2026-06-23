@@ -21,7 +21,7 @@ Intent, discovery, modeling, execution, and validation are internal contract bou
 Create files under the current repo:
 
 ```text
-.kkt/<slug>/
+.kkt/loop/<slug>/
 ```
 
 Use a short filesystem-safe slug derived from the objective.
@@ -31,14 +31,14 @@ Use a short filesystem-safe slug derived from the objective.
 Always create:
 
 ```text
-.kkt/<slug>/kkt.yaml
-.kkt/<slug>/intent.md
-.kkt/<slug>/discovery.md
-.kkt/<slug>/model.md
-.kkt/<slug>/plan.md
-.kkt/<slug>/evidence.md
-.kkt/<slug>/progress.md
-.kkt/<slug>/notes.md
+.kkt/loop/<slug>/kkt.yaml
+.kkt/loop/<slug>/intent.md
+.kkt/loop/<slug>/discovery.md
+.kkt/loop/<slug>/model.md
+.kkt/loop/<slug>/plan.md
+.kkt/loop/<slug>/evidence.md
+.kkt/loop/<slug>/progress.md
+.kkt/loop/<slug>/notes.md
 ```
 
 - `kkt.yaml`: canonical state index, active layer, method choices, artifact references, approval state, stop conditions.
@@ -76,7 +76,7 @@ Always create:
 Use this objective when launching or preparing goal mode:
 
 ```text
-Execute the KKT workspace at .kkt/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, plan.md, progress.md, evidence.md, and notes.md. Re-read them before each continuation, keep state, progress, and evidence current, re-optimize only when new evidence invalidates the selected plan, and stop only for listed stop conditions, proven acceptance criteria, or explicit user input.
+Execute the KKT workspace at .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, plan.md, progress.md, evidence.md, and notes.md. Re-read them before each continuation, keep state, progress, and evidence current, re-optimize only when new evidence invalidates the selected plan, and stop only for listed stop conditions, proven acceptance criteria, or explicit user input.
 ```
 
 Do not set a token budget unless the user explicitly provides one.

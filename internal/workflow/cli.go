@@ -102,7 +102,7 @@ func runStart(args []string, stdout io.Writer) error {
 
 	fmt.Fprintf(stdout, "created: %s\n", workspace.Path)
 	fmt.Fprintf(stdout, "profile: %s\n", workspace.Profile)
-	fmt.Fprintln(stdout, "next: inspect relevant code/docs, complete discovery, then update model.md before requesting approval")
+	fmt.Fprintf(stdout, "next: %s\n", startInstruction(workspace.Profile))
 	return nil
 }
 
@@ -234,4 +234,15 @@ func firstArg(args []string) string {
 		return ""
 	}
 	return args[0]
+}
+
+func startInstruction(profile string) string {
+	switch profile {
+	case "daily":
+		return "inspect relevant code/docs, keep compact state in .kkt/kkt.yaml, then request approval before edits"
+	case "model":
+		return "inspect relevant code/docs, complete discovery.md, then update model.md with the selected model"
+	default:
+		return "inspect relevant code/docs, complete discovery.md, then update model.md before requesting approval"
+	}
 }

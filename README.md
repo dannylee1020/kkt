@@ -12,6 +12,22 @@
 
 kkt applies [constrained optimization](https://en.wikipedia.org/wiki/Constrained_optimization) to coding-agent workflows. Named after the [Karush-Kuhn-Tucker conditions](https://en.wikipedia.org/wiki/Karush%E2%80%93Kuhn%E2%80%93Tucker_conditions), it translates mathematical modeling discipline into a practical framework for identifying application constraints, choosing feasible implementation paths, and validating the result.
 
+## How It Works
+
+```text
+Without KKT:
+
+request --> agent --> plan --> edits --> validation --> finish
+
+
+With KKT:
+
+request --> agent --> KKT modeling --> edits --> validation --> finish
+                           |
+                           v
+        constraints --> optimization --> verification
+```
+
 ## Why kkt
 Good implementation plans are shaped as much by what not to do as by what to do.
 
@@ -71,10 +87,9 @@ where:
 
 | surface | what it offers | install | use when |
 | --- | --- | --- | --- |
-| Skills | Lightweight manual KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | `scripts/install.sh` | You want to try KKT with explicit skill invocation and a small setup surface. |
-| CLI | Agent-invoked KKT workflow state through global agent instructions and `.kkt/<run>/` files. | `scripts/install-cli.sh`, then `kkt init <agent>` | You want the coding agent to call KKT during normal coding work. |
+| Skills | Lightweight manual KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | `scripts/install.sh` | You want lightweight, user controlled skill invocation and a small setup surface. |
+| CLI | Agent-invoked KKT workflow state through global agent instructions and `.kkt/` files. | `scripts/install-cli.sh`, then `kkt init <agent>` | You want the coding agent to call KKT during normal coding work. |
 
-The skills path is the manual surface. The CLI path sets up the coding agent to call KKT from `AGENTS.md`, `CLAUDE.md`, or the equivalent instruction file.
 
 ## Install
 
@@ -140,61 +155,18 @@ kkt init codex --dry-run
 scripts/install-cli.sh --dry-run
 ```
 
-The skills installer is shell-only and does not require Node or Go. It copies the KKT skill directories into the detected agent skill roots.
-
-The CLI installer uses `KKT_BINARY_URL` when a prebuilt binary is available. Until release binaries exist, source installs require Go for the CLI build.
-
-## How It Works
-
-```text
-Without KKT:
-
-request --> agent --> first plausible plan --> edits --> validation --> finish
-
-
-With KKT:
-request --> agent --> KKT --> optimization modeled plan --> edits --> validation --> finish
-```
+Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL. If no matching binary is available, the installer falls back to building from source with Go.
 
 
 ## Skills
 
-| skill | use it for | output |
-| --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | lightweight model, approval, implementation, validation |
-| `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence |
-| `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief |
+| skill | use it for | output | durable state |
+| --- | --- | --- | --- |
+| `$kkt` | normal feature work, bug fixes, and refactors | lightweight model, approval, implementation, validation | optional `.kkt/kkt.yaml` |
+| `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
+| `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
 
-`$kkt` is lightweight and does not create durable files by default. It shows the selected model for approval before editing.
-
-Persistence tiers:
-
-| tier | skill | durable state |
-| --- | --- | --- |
-| daily | `$kkt` | none by default; optional compact `kkt.yaml` for small state handoff |
-| model | `$kkt-model` | `.kkt-model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` |
-| loop | `$kkt-loop` | `.kkt/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` |
-
-`kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail.
-
-`$kkt-loop` creates `.kkt/<slug>/` with:
-
-```text
-kkt.yaml
-intent.md
-discovery.md
-model.md
-plan.md
-evidence.md
-progress.md
-notes.md
-```
-
-It plans first, asks for approval, then creates the workspace and executes through the durable loop.
-
-`$kkt-model` is non-mutating by default. It inspects, models, compares feasible alternatives, and asks for user input only when the tradeoff cannot be resolved from the repo.
-
-Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while daily `$kkt` stays compact.
+All durable state lives under `.kkt/`. `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while daily `$kkt` stays compact.
 
 ## Request Shape
 

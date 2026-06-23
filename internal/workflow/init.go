@@ -95,7 +95,7 @@ Before implementation-heavy requests, run:
 %s classify "<user request>"
 `+"```"+`
 
-If the decision is `+"`invoke`"+`, run the suggested start command, inspect the generated `.kkt/<run>/` workspace, and follow its state contract.
+If the decision is `+"`invoke`"+`, run the suggested start command, inspect the generated `.kkt/model/<run>/`, `.kkt/loop/<run>/`, or compact `.kkt/kkt.yaml` workspace, and follow its state contract.
 
 During KKT-managed work:
 
@@ -103,7 +103,7 @@ During KKT-managed work:
 - do not spawn KKT subagents or assume detached harness behavior;
 - complete discovery before modeling;
 - show the selected model and get explicit approval before file edits;
-- update `.kkt/<run>/progress.md` and `.kkt/<run>/evidence.md` as work proceeds;
+- for loop work, update `.kkt/loop/<run>/progress.md` and `.kkt/loop/<run>/evidence.md` as work proceeds;
 - run `+"`%s validate`"+` before the final response when a KKT workspace is active;
 - if KKT fails, continue normally and report the failure.
 

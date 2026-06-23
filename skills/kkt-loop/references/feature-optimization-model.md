@@ -116,9 +116,9 @@ Use `references/layered-modeling-methods.md` when the request needs method selec
 
 Use `references/state-contract.md` as the authoritative state contract.
 
-- Daily tier (`kkt`): no durable files by default. If state is needed, use one compact `kkt.yaml`; do not create Markdown layer artifacts.
-- Model tier (`kkt-model`): use `.kkt-model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, and `model.md` when the model needs durable context.
-- Loop tier (`kkt-loop`): use `.kkt/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md`.
+- Daily tier (`kkt`): no durable files by default. If state is needed, use one compact `.kkt/kkt.yaml`; do not create Markdown layer artifacts.
+- Model tier (`kkt-model`): use `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, and `model.md` when the model needs durable context.
+- Loop tier (`kkt-loop`): use `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md`.
 
 YAML carries canonical state, status, decisions, method invocations, and artifact references. Markdown carries rich context that would become lossy if compressed into YAML.
 

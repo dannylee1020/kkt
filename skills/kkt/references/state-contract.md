@@ -8,9 +8,9 @@ Layers are internal contract boundaries. They are not public skills and should n
 
 | Tier | Skill | Durable files | Use when |
 | --- | --- | --- | --- |
-| Daily | `kkt` | none by default; optional `kkt.yaml` | the task is small enough that rich Markdown context would be overhead. |
-| Model | `kkt-model` | `.kkt-model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` | the output is a durable model or decision brief before execution. |
-| Loop | `kkt-loop` | `.kkt/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | the task is long-running, multi-step, or needs continuation. |
+| Daily | `kkt` | none by default; optional `.kkt/kkt.yaml` | the task is small enough that rich Markdown context would be overhead. |
+| Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` | the output is a durable model or decision brief before execution. |
+| Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | the task is long-running, multi-step, or needs continuation. |
 
 ## Canonical Rule
 
@@ -26,7 +26,7 @@ Layers are internal contract boundaries. They are not public skills and should n
 ```yaml
 schema_version: 1
 workspace_type: daily | model | loop
-profile: daily | deep | loop
+profile: daily | model | loop
 status: initialized | modeling | approved | executing | validating | complete | blocked
 active_layer: intent | discovery | modeling | execution | validation
 layers:

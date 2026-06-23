@@ -52,7 +52,7 @@ Intake before modeling. Model before editing. Show the final modeling result and
 
 For small tasks, keep the model brief. Do not create durable files unless the user asks, the task becomes long-running, or `$kkt-loop` is more appropriate.
 
-When durable state is useful for normal `$kkt` work, use the daily tier from `references/state-contract.md`: a single `kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Do not create Markdown layer artifacts in the daily tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
+When durable state is useful for normal `$kkt` work, use the daily tier from `references/state-contract.md`: a single `.kkt/kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Do not create Markdown layer artifacts in the daily tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
 
 The intent, discovery, modeling, execution, and validation layers are internal contract boundaries, not user-facing skills. Run them inside this skill when needed; do not ask the user to invoke layer names directly.
 

@@ -80,10 +80,10 @@ End with one of:
 For substantial modeling work, write a modeling artifact only when useful or requested:
 
 ```text
-.kkt-model/<slug>/kkt.yaml
-.kkt-model/<slug>/intent.md
-.kkt-model/<slug>/discovery.md
-.kkt-model/<slug>/model.md
+.kkt/model/<slug>/kkt.yaml
+.kkt/model/<slug>/intent.md
+.kkt/model/<slug>/discovery.md
+.kkt/model/<slug>/model.md
 ```
 
 Use `kkt.yaml` as the canonical state index and status record. Use the Markdown files for rich intent, discovery, and modeling context that would be lossy in YAML.

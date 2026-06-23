@@ -21,7 +21,8 @@ Options:
 
 Environment:
   KKT_INSTALL_URL           Source archive URL. Defaults to main branch archive.
-  KKT_BINARY_URL            Optional prebuilt kkt binary URL.
+  KKT_BINARY_URL            Explicit prebuilt kkt binary URL.
+  KKT_VERSION               GitHub Release tag to install. Defaults to latest.
 EOF
 }
 
@@ -42,16 +43,60 @@ script_dir() {
   cd -- "$(dirname -- "$0")" && pwd -P
 }
 
-download_file() {
+try_download_file() {
   local url="$1"
   local dest="$2"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$dest" || fail "Failed to download $url."
+    curl -fsSL "$url" -o "$dest"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$dest" "$url" || fail "Failed to download $url."
+    wget -qO "$dest" "$url"
   else
     fail "curl or wget is required to download KKT."
+  fi
+}
+
+download_file() {
+  local url="$1"
+  local dest="$2"
+
+  try_download_file "$url" "$dest" || fail "Failed to download $url."
+}
+
+github_release_base_url() {
+  printf '%s\n' "https://github.com/dannylee1020/kkt/releases"
+}
+
+detect_platform() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+
+  case "$os" in
+    Darwin) os="darwin" ;;
+    Linux) os="linux" ;;
+    *) return 1 ;;
+  esac
+
+  case "$arch" in
+    x86_64|amd64) arch="amd64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    *) return 1 ;;
+  esac
+
+  printf '%s-%s\n' "$os" "$arch"
+}
+
+default_binary_url() {
+  local platform asset base
+  platform="$(detect_platform)" || return 1
+  asset="kkt-$platform"
+  base="$(github_release_base_url)"
+
+  if [ -n "${KKT_VERSION:-}" ]; then
+    printf '%s/download/%s/%s\n' "$base" "$KKT_VERSION" "$asset"
+  else
+    printf '%s/latest/download/%s\n' "$base" "$asset"
   fi
 }
 
@@ -126,24 +171,43 @@ parse_args() {
 }
 
 install_cli() {
-  local root="$1"
+  local kkt_command binary_url root
   kkt_command="$(expand_home "$bin_dir")/kkt"
+  binary_url="${KKT_BINARY_URL:-}"
+  if [ -z "$binary_url" ]; then
+    binary_url="$(default_binary_url || true)"
+  fi
 
   if [ "$dry_run" = "true" ]; then
-    log "[dry-run] cli: install kkt to $kkt_command"
+    if [ -n "$binary_url" ]; then
+      log "[dry-run] cli: download kkt from $binary_url to $kkt_command"
+    elif command -v go >/dev/null 2>&1; then
+      log "[dry-run] cli: build kkt to $kkt_command"
+    else
+      fail "Could not install kkt CLI: no prebuilt binary supports $(uname -s)/$(uname -m), and Go is not installed."
+    fi
     return
   fi
 
   mkdir -p "$(dirname "$kkt_command")"
-  if [ -n "${KKT_BINARY_URL:-}" ]; then
-    log "Downloading kkt CLI from $KKT_BINARY_URL"
-    download_file "$KKT_BINARY_URL" "$kkt_command"
-    chmod +x "$kkt_command"
-  elif command -v go >/dev/null 2>&1; then
+
+  if [ -n "$binary_url" ]; then
+    log "Downloading kkt CLI from $binary_url"
+    if try_download_file "$binary_url" "$kkt_command"; then
+      chmod +x "$kkt_command"
+      log "Installed kkt CLI: $kkt_command"
+      return
+    fi
+    rm -f "$kkt_command"
+    log "Could not download prebuilt kkt CLI from $binary_url"
+  fi
+
+  if command -v go >/dev/null 2>&1; then
+    root="$(resolve_root)"
     log "Building kkt CLI to $kkt_command"
     (cd "$root" && go build -o "$kkt_command" ./cmd/kkt)
   else
-    fail "Could not install kkt CLI: Go is not installed and KKT_BINARY_URL is not set."
+    fail "Could not install kkt CLI: prebuilt binary unavailable and Go is not installed."
   fi
 
   log "Installed kkt CLI: $kkt_command"
@@ -151,9 +215,7 @@ install_cli() {
 
 main() {
   parse_args "$@"
-  local root
-  root="$(resolve_root)"
-  install_cli "$root"
+  install_cli
 }
 
 main "$@"
