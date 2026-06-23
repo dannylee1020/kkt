@@ -83,11 +83,11 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		}
 		return "", err
 	}
-	type candidate struct {
+	type workspaceCandidate struct {
 		sortKey string
 		path    string
 	}
-	var dirs []candidate
+	var dirs []workspaceCandidate
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -99,7 +99,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 			}
 			for _, nestedEntry := range nested {
 				if nestedEntry.IsDir() {
-					dirs = append(dirs, candidate{
+					dirs = append(dirs, workspaceCandidate{
 						sortKey: nestedEntry.Name(),
 						path:    filepath.Join(base, entry.Name(), nestedEntry.Name()),
 					})
@@ -108,7 +108,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 			continue
 		}
 		if entry.Name() != "." {
-			dirs = append(dirs, candidate{
+			dirs = append(dirs, workspaceCandidate{
 				sortKey: entry.Name(),
 				path:    filepath.Join(base, entry.Name()),
 			})
