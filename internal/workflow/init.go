@@ -16,6 +16,7 @@ type InitPlan struct {
 	Agent   string
 	Path    string
 	Content string
+	Remove  bool
 }
 
 func InitPlans(agent, command string) ([]InitPlan, error) {
@@ -31,28 +32,41 @@ func InitPlansWithHome(agent, home, command string) ([]InitPlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	grouped := map[string][]string{}
-	for _, target := range targets {
-		path := filepath.Join(home, instructionPath(target))
-		grouped[path] = append(grouped[path], target)
-	}
 
-	plans := make([]InitPlan, 0, len(grouped))
+	plans := []InitPlan{}
 	for _, target := range targets {
-		path := filepath.Join(home, instructionPath(target))
-		agents, ok := grouped[path]
-		if !ok {
-			continue
-		}
-		delete(grouped, path)
-		agentLabel := strings.Join(agents, ", ")
-		plans = append(plans, InitPlan{
-			Agent:   agentLabel,
-			Path:    path,
-			Content: instructionContent(agentLabel, command),
-		})
+		plans = append(plans, initPlansForTarget(target, home, command)...)
+	}
+	if needsLegacyCleanup(targets) {
+		plans = append(plans, legacyCleanupPlans(home)...)
 	}
 	return plans, nil
+}
+
+func initPlansForTarget(agent, home, command string) []InitPlan {
+	entryPath := filepath.Join(home, instructionPath(agent))
+	if usesInstructionReference(agent) {
+		kktPath := filepath.Join(home, kktInstructionPath(agent))
+		return []InitPlan{
+			{
+				Agent:   agent,
+				Path:    entryPath,
+				Content: instructionReferenceContent(kktPath),
+			},
+			{
+				Agent:   agent,
+				Path:    kktPath,
+				Content: instructionContent(agent, command),
+			},
+		}
+	}
+	return []InitPlan{
+		{
+			Agent:   agent,
+			Path:    entryPath,
+			Content: instructionContent(agent, command),
+		},
+	}
 }
 
 func expandAgent(agent string) ([]string, error) {
@@ -68,15 +82,64 @@ func expandAgent(agent string) ([]string, error) {
 
 func instructionPath(agent string) string {
 	switch agent {
+	case "codex":
+		return filepath.Join(".codex", "AGENTS.md")
 	case "claude":
 		return filepath.Join(".claude", "CLAUDE.md")
 	case "opencode":
-		return filepath.Join(".agents", "AGENTS.md")
+		return filepath.Join(".config", "opencode", "AGENTS.md")
 	case "pi":
-		return filepath.Join(".agents", "AGENTS.md")
-	default:
-		return filepath.Join(".agents", "AGENTS.md")
+		return filepath.Join(".pi", "agent", "AGENTS.md")
 	}
+	return ""
+}
+
+func kktInstructionPath(agent string) string {
+	switch agent {
+	case "codex":
+		return filepath.Join(".codex", "KKT.md")
+	case "claude":
+		return filepath.Join(".claude", "KKT.md")
+	}
+	return ""
+}
+
+func usesInstructionReference(agent string) bool {
+	return agent == "codex" || agent == "claude"
+}
+
+func needsLegacyCleanup(agents []string) bool {
+	for _, agent := range agents {
+		switch agent {
+		case "codex", "opencode", "pi":
+			return true
+		}
+	}
+	return false
+}
+
+func legacyCleanupPlans(home string) []InitPlan {
+	return []InitPlan{
+		{
+			Agent:  "legacy",
+			Path:   filepath.Join(home, ".agents", "AGENTS.md"),
+			Remove: true,
+		},
+		{
+			Agent:  "legacy",
+			Path:   filepath.Join(home, ".agents", "KKT.md"),
+			Remove: true,
+		},
+	}
+}
+
+func instructionReferenceContent(path string) string {
+	return strings.Join([]string{
+		instructionStart,
+		"@" + path,
+		instructionEnd,
+		"",
+	}, "\n")
 }
 
 func instructionContent(agent, command string) string {
@@ -140,6 +203,31 @@ func WriteInstruction(path, content string) (bool, error) {
 		next += "\n\n"
 	}
 	next += strings.TrimSpace(content) + "\n"
+	if next == existing {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(next), 0o644)
+}
+
+func RemoveInstruction(path string) (bool, error) {
+	existingBytes, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	existing := string(existingBytes)
+	start := strings.Index(existing, instructionStart)
+	end := strings.Index(existing, instructionEnd)
+	if start < 0 || end < 0 || end < start {
+		return false, nil
+	}
+	end += len(instructionEnd)
+	next := strings.Trim(existing[:start]+existing[end:], "\n")
+	if next != "" {
+		next += "\n"
+	}
 	if next == existing {
 		return false, nil
 	}

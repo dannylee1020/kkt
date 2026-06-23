@@ -183,6 +183,23 @@ func runInit(args []string, stdout io.Writer) error {
 	for _, plan := range plans {
 		fmt.Fprintf(stdout, "target: %s\n", plan.Agent)
 		fmt.Fprintf(stdout, "file: %s\n", plan.Path)
+		if plan.Remove {
+			if *dryRun {
+				fmt.Fprintln(stdout, "---")
+				fmt.Fprintln(stdout, "remove managed KKT block if present")
+				continue
+			}
+			changed, err := RemoveInstruction(plan.Path)
+			if err != nil {
+				return err
+			}
+			if changed {
+				fmt.Fprintln(stdout, "removed")
+			} else {
+				fmt.Fprintln(stdout, "already current")
+			}
+			continue
+		}
 		if *dryRun {
 			fmt.Fprintln(stdout, "---")
 			fmt.Fprint(stdout, plan.Content)

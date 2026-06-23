@@ -126,11 +126,13 @@ Supported CLI setup:
 
 | agent | setup command | integration |
 | --- | --- | --- |
-| Codex | `kkt init codex` | `~/.agents/AGENTS.md` instructions |
-| Claude Code | `kkt init claude` | `~/.claude/CLAUDE.md` instructions |
-| Pi | `kkt init pi` | `~/.agents/AGENTS.md` instructions |
-| OpenCode | `kkt init opencode` | `~/.agents/AGENTS.md` instructions |
-| All | `kkt init all` | shared `~/.agents/AGENTS.md` plus `~/.claude/CLAUDE.md` instructions |
+| Codex | `kkt init codex` | `~/.codex/AGENTS.md` references `~/.codex/KKT.md` |
+| Claude Code | `kkt init claude` | `~/.claude/CLAUDE.md` references `~/.claude/KKT.md` |
+| Pi | `kkt init pi` | `~/.pi/agent/AGENTS.md` inline instructions |
+| OpenCode | `kkt init opencode` | `~/.config/opencode/AGENTS.md` inline instructions |
+| All | `kkt init all` | creates the documented instruction files for each agent |
+
+KKT keeps Codex and Claude Code entry files small with adjacent `KKT.md` references. Pi and OpenCode receive inline instructions because their global `AGENTS.md` loaders do not document `@.../KKT.md` imports.
 
 ## Quick Start
 
