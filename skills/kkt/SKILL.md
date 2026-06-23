@@ -17,9 +17,9 @@ Intake before modeling. Model before editing. Show the final modeling result and
 ## Workflow
 
 1. Translate the user's rough input into an intent frame: user goal, desired behavior, user-visible success, scope boundary, priority signals, examples, and explicit user constraints.
-2. Ask only the smallest useful set of meaning-focused questions; do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
+2. Before asking, apply the owner-decision filter: inspect discoverable facts locally, choose conservative reversible defaults when risk is low and record them as assumptions, and ask only for owner decisions that materially change product behavior, risk, scope, approval, or execution mode. Do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
 3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues to discover repo facts, constraints, validation paths, and likely technical non-goals before forming the model.
-4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, and unknowns. Ask only when a high-impact product choice or infeasible ambiguity remains.
+4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions. Ask only when a high-impact product choice, irreversible tradeoff, external dependency, destructive action, scope expansion, or infeasible ambiguity remains.
 5. Build a compact optimization model using the daily profile:
    - request intake;
    - objective;

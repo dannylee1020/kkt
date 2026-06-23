@@ -65,10 +65,14 @@ request_intake:
 Use this intake process before modeling:
 
 1. Parse explicit user statements first.
-2. Ask only the smallest useful set of meaning-focused questions before discovery.
+2. Before asking, apply the owner-decision filter:
+   - discoverable fact: inspect the repo, docs, tests, config, schemas, routes, logs, or issues instead of asking;
+   - reversible default: choose the conservative low-risk option, label it as an assumption, and continue;
+   - owner decision: ask only when the answer materially changes product behavior, risk, scope, approval, external dependencies, destructive actions, or execution mode;
+   - blocking unknown: stop and ask when no conservative default keeps the hard constraints feasible.
 3. Inspect relevant repo context to infer discoverable constraints, validation paths, and likely technical non-goals.
 4. Label intent fields as explicit, inferred, assumption, or unknown; label discovery fields as observed, inferred, assumption, or unknown.
-5. Ask the user only when an unknown materially changes product meaning, feasibility, risk, scope, or execution mode.
+5. Ask the user only when an owner decision or blocking unknown materially changes product meaning, feasibility, risk, scope, approval, or execution mode.
 6. Otherwise proceed with conservative assumptions and carry them into the model.
 
 Default execution modes:
@@ -77,7 +81,7 @@ Default execution modes:
 - KKT Loop: `loop`.
 - KKT Model: `model_only`.
 
-Do not ask the user to identify files, routes, schemas, tests, validation commands, or config that can be discovered locally.
+Do not ask the user to identify files, routes, schemas, tests, validation commands, or config that can be discovered locally. Do not ask about low-risk reversible defaults before discovery; record the default as an assumption and let later evidence re-open the model if needed.
 
 ## Mathematical Translation
 

@@ -1,1 +1,4 @@
 memory/
+dist/
+.kkt/
+.kkt-model/

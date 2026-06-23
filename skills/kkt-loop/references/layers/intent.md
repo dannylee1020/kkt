@@ -17,9 +17,14 @@ Use this internal layer to turn a rough user request into a compact user-meaning
    - small or clear task: ask 0-1 questions;
    - medium task or some ambiguity: ask 1-3 targeted questions;
    - large, high-risk, or ambiguous task: run a short Socratic pass before discovery.
-5. Do not ask questions that discovery can answer from the repo.
-6. Write or update the intent layer state when durable state exists.
-7. End with a layer contract and `next_layer_readiness`.
+5. Apply the owner-decision filter before asking:
+   - discoverable fact: defer to discovery instead of asking;
+   - reversible default: assume the conservative low-risk option and record it;
+   - owner decision: ask when the answer changes product behavior, risk, scope, approval, or execution mode;
+   - blocking unknown: stop when no conservative default keeps the hard constraints feasible.
+6. Do not ask questions that discovery can answer from the repo.
+7. Write or update the intent layer state when durable state exists.
+8. End with a layer contract and `next_layer_readiness`.
 
 ## Output Contract
 
@@ -38,6 +43,7 @@ layer_contract:
     priority_signals:
     explicit_user_constraints:
     ambiguity_log:
+    question_filter:
     can_continue_to_discovery:
   decisions:
   assumptions:
@@ -51,5 +57,6 @@ layer_contract:
 - Do not select implementation plans.
 - Do not perform deep discovery.
 - Do not ask the user to enumerate files, repo constraints, test commands, schemas, routes, or config that can be discovered locally.
+- Do not ask about low-risk reversible defaults before discovery; record the default as an assumption.
 - Do not treat inferred repo constraints or validation paths as intent-layer outputs.
 - Do not hide blocking ambiguity in assumptions.

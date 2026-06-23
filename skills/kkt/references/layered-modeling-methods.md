@@ -76,6 +76,7 @@ Methods:
 - Obstacle questions: ask what would make the interpretation unacceptable, too broad, or pointed at the wrong workflow.
 - Example / counterexample prompts: ask for examples only when they would prevent a materially wrong interpretation.
 - Tradeoff prompt: ask what matters more only when competing user priorities change the model.
+- Owner-decision filter: classify each possible question as a discoverable fact, reversible default, owner decision, or blocking unknown before asking.
 
 Adaptive question budget:
 
@@ -83,6 +84,8 @@ Adaptive question budget:
 - Medium task or some ambiguity: ask 1-3 targeted questions.
 - Large, high-risk, or ambiguous task: run a short Socratic pass before discovery.
 - Never ask the user for files, routes, schemas, test commands, or validation paths that discovery can find.
+- Do not ask about low-risk reversible defaults; choose the conservative default, record it as an assumption, and let discovery or validation reopen it if contradicted.
+- Ask only for owner decisions: product intent, risk tolerance, scope boundaries, approval, irreversible tradeoffs, destructive actions, external dependencies, paid services, credentials, or execution mode.
 
 Meaning-focused prompt patterns:
 
@@ -92,6 +95,7 @@ Meaning-focused prompt patterns:
 - Can you give an example or counterexample?
 - What would be an unacceptable interpretation?
 - If there is a tradeoff, what matters more?
+- Is this a product/risk/scope decision only the owner can make, or can discovery answer it?
 
 Output contract:
 
@@ -103,6 +107,7 @@ Output contract:
 - priority signals;
 - explicit user constraints;
 - ambiguity log;
+- question filter result for any unresolved high-impact question;
 - whether discovery can proceed.
 
 ### Discovery

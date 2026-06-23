@@ -54,9 +54,9 @@ Always create:
 
 1. Check current goal state with `get_goal` if available. Do not create a second active goal without explicit user direction.
 2. Translate the user's rough input into an intent frame: user goal, desired behavior, user-visible success, scope boundary, priority signals, examples, and explicit user constraints.
-3. Ask only the smallest useful set of meaning-focused questions; do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
+3. Before asking, apply the owner-decision filter: inspect discoverable facts locally, choose conservative reversible defaults when risk is low and record them as assumptions, and ask only for owner decisions that materially change product behavior, risk, scope, approval, or execution mode. Do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
 4. Inspect relevant repo context to discover repo facts, constraints, validation paths, and likely technical non-goals before writing the model.
-5. Ask only when an unresolved field materially changes feasibility, product behavior, risk, scope, or execution mode.
+5. Ask only when an unresolved field is an owner decision that materially changes feasibility, product behavior, risk, scope, approval, or execution mode.
 6. Build the optimization model and derive the execution contract from the intent frame and discovery results using the loop profile.
 7. Show the final modeling result and wait for explicit user approval.
 8. Write the durable workspace only after approval.

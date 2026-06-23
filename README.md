@@ -5,8 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="package.json"><img alt="license: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-16a34a.svg"></a>
-  <a href="package.json"><img alt="node >=22" src="https://img.shields.io/badge/node-%3E%3D22-f97316.svg"></a>
+  <a href="LICENSE"><img alt="license: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-16a34a.svg"></a>
 </p>
 
 <hr style="width: 100%; border: 0; border-top: 2px solid #e5e7eb;">
@@ -68,58 +67,64 @@ where:
 - the selected plan is the best feasible plan, not the first plausible plan
 - validation is the certificate that the selected plan satisfies the model
 
+## Choose a Surface
+
+| surface | what it offers | install | use when |
+| --- | --- | --- | --- |
+| Skills | Lightweight manual KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | `scripts/install.sh` | You want to try KKT with explicit skill invocation and a small setup surface. |
+| CLI | Agent-invoked KKT workflow state through global agent instructions and `.kkt/<run>/` files. | `scripts/install-cli.sh`, then `kkt init <agent>` | You want the coding agent to call KKT during normal coding work. |
+
+The skills path is the manual surface. The CLI path sets up the coding agent to call KKT from `AGENTS.md`, `CLAUDE.md`, or the equivalent instruction file.
+
 ## Install
 
-Install with curl:
+Install skills:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-Upgrade an existing install:
+The skills installer auto-detects supported coding agents and installs KKT skills into their global skill directories. Use an explicit target when needed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade
+scripts/install.sh --target codex
+scripts/install.sh --target claude
+scripts/install.sh --target all
 ```
 
-By default, this installs the skills for Codex, Claude Code, Pi, and OpenCode using their shared skill locations:
-
-```text
-~/.agents/skills
-~/.claude/skills
-```
-
-Target-specific installs use the same shared path for Codex, Pi, and OpenCode:
-
-```text
-Codex:       ~/.agents/skills
-Claude Code: ~/.claude/skills
-Pi:          ~/.agents/skills
-OpenCode:    ~/.agents/skills
-```
-
-Useful options:
+Install the CLI:
 
 ```bash
---target codex
---target claude
---target pi
---target opencode
---local
---force
---dry-run
+curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install-cli.sh | bash
+kkt init codex
 ```
 
 From a checkout:
 
 ```bash
 scripts/install.sh
-scripts/install.sh upgrade
+scripts/install-cli.sh --bin-dir ~/.local/bin
+kkt init codex
 ```
+
+Supported CLI setup:
+
+| agent | setup command | integration |
+| --- | --- | --- |
+| Codex | `kkt init codex` | `~/.agents/AGENTS.md` instructions |
+| Claude Code | `kkt init claude` | `~/.claude/CLAUDE.md` instructions |
+| Pi | `kkt init pi` | `~/.agents/AGENTS.md` instructions |
+| OpenCode | `kkt init opencode` | `~/.agents/AGENTS.md` instructions |
+| All | `kkt init all` | shared `~/.agents/AGENTS.md` plus `~/.claude/CLAUDE.md` instructions |
 
 ## Quick Start
 
-Use the skill syntax supported by your agent:
+| surface | normal use | notes |
+| --- | --- | --- |
+| Skills | `$kkt <feature to implement>` | Use `$kkt-model` for deeper architecture tradeoffs and `$kkt-loop` for longer work. |
+| CLI | Ask your coding agent for coding work normally. | The agent calls `kkt` when its project instructions say to use KKT. |
+
+Skill invocation varies by agent:
 
 ```text
 Codex:       $kkt
@@ -128,45 +133,29 @@ Pi:          /skill:kkt
 OpenCode:    ask OpenCode to use the kkt skill
 ```
 
-Start with a rough request:
+CLI setup and debugging commands:
 
-```text
-$kkt <feature to implement>
+```bash
+kkt init codex --dry-run
+scripts/install-cli.sh --dry-run
 ```
 
-Add constraints only when you already know them:
+The skills installer is shell-only and does not require Node or Go. It copies the KKT skill directories into the detected agent skill roots.
 
-```text
-$kkt <feature to implement>
-
-Constraints:
-- <known constraint>
-```
-kkt should inspect the repo, infer discoverable constraints, and ask only for decisions that materially affect feasibility, product behavior, risk, or execution mode.
+The CLI installer uses `KKT_BINARY_URL` when a prebuilt binary is available. Until release binaries exist, source installs require Go for the CLI build.
 
 ## How It Works
 
-Default agent flow:
-
 ```text
-user request
-  -> plausible plan
-  -> edits
-  -> summary
+Without KKT:
+
+request --> agent --> first plausible plan --> edits --> validation --> finish
+
+
+With KKT:
+request --> agent --> KKT --> optimization modeled plan --> edits --> validation --> finish
 ```
 
-with kkt:
-
-```text
-user request
-  -> request intake
-  -> constraint discovery
-  -> feasible region
-  -> optimization modeling with top N plans.
-  -> approval
-  -> focused edits
-  -> validation certificate
-```
 
 ## Skills
 

@@ -19,7 +19,7 @@ Intent, discovery, and modeling are internal contract boundaries, not user-facin
 ## Workflow
 
 1. Translate the user's rough input into an intent frame: user goal, desired behavior, user-visible success, scope boundary, priority signals, examples, and explicit user constraints.
-2. Ask only the smallest useful set of meaning-focused questions; do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
+2. Before asking, apply the owner-decision filter: inspect discoverable facts locally, choose conservative reversible defaults when risk is low and record them as assumptions, and ask only for owner decisions that materially change product behavior, risk, scope, approval, or execution mode. Do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
 3. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs to discover repo facts, constraints, validation paths, and likely technical non-goals.
 4. State explicit user requirements, discovered facts, inferred constraints, assumptions, and unknowns separately.
 5. Build a discovery map when the request crosses multiple modules, workflows, or architecture boundaries.
@@ -35,7 +35,7 @@ Intent, discovery, and modeling are internal contract boundaries, not user-facin
    - validation clarity;
    - reversibility;
    - fit with user intent.
-11. Ask the user only for unresolved product choices, risk tolerance, scope boundaries, constraint relaxation, or execution-mode ambiguity.
+11. Ask the user only for owner decisions: unresolved product choices, risk tolerance, scope boundaries, constraint relaxation, approval, or execution-mode ambiguity that cannot be resolved by repo inspection or conservative reversible defaults.
 12. End with a selected model, implementation-ready brief, or a small set of user decisions needed before implementation.
 
 ## Candidate Model Shape
