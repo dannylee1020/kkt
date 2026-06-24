@@ -51,7 +51,7 @@ func ClassifyWithCommand(request, command string) Classification {
 		Reason:   reason,
 	}
 	if decision == "invoke" {
-		result.NextCommand = fmt.Sprintf("%s start --profile %s %q", command, profile, request)
+		result.NextCommand = fmt.Sprintf("%s start %q", command, request)
 	}
 	return result
 }

@@ -1,32 +1,38 @@
 package workflow
 
 import (
-	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 )
 
+var Version = "dev"
+
 const usageText = `KKT Workflow CLI
 
 Usage:
-  kkt classify [--json] <request>
-  kkt start [--profile daily|loop|model] <request>
+  kkt --version
+  kkt classify <request>
+  kkt start <request>
   kkt status [path]
   kkt next [path]
   kkt validate [path]
-  kkt init [--dry-run] [--command path] codex|claude|opencode|pi|all
+  kkt init codex|claude|opencode|pi|all
+  kkt uninstall [codex|claude|opencode|pi|all]
 
 KKT coordinates one existing coding agent session. It does not own the TUI,
 spawn subagents, route models, or run a detached harness.
 `
 
 func Run(args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" {
 		fmt.Fprint(stdout, usageText)
+		return nil
+	}
+	if args[0] == "--version" {
+		fmt.Fprintf(stdout, "kkt %s\n", Version)
 		return nil
 	}
 
@@ -43,33 +49,23 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runValidate(args[1:], stdout)
 	case "init":
 		return runInit(args[1:], stdout)
+	case "uninstall":
+		return runUninstall(args[1:], stdout)
 	default:
 		return fmt.Errorf("unsupported command %q\n\n%s", args[0], usageText)
 	}
 }
 
 func runClassify(args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("classify", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	jsonOut := fs.Bool("json", false, "print JSON")
-	if err := fs.Parse(args); err != nil {
+	if err := rejectFlags("classify", args); err != nil {
 		return err
 	}
-	request := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	request := strings.TrimSpace(strings.Join(args, " "))
 	if request == "" {
 		return errors.New("classify requires a request")
 	}
 
 	result := ClassifyWithCommand(request, os.Args[0])
-	if *jsonOut {
-		encoded, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(stdout, string(encoded))
-		return nil
-	}
-
 	fmt.Fprintf(stdout, "decision: %s\n", result.Decision)
 	fmt.Fprintf(stdout, "profile: %s\n", result.Profile)
 	fmt.Fprintf(stdout, "reason: %s\n", result.Reason)
@@ -79,22 +75,62 @@ func runClassify(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func runStart(args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("start", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	profile := fs.String("profile", "", "daily, loop, or model")
-	if err := fs.Parse(args); err != nil {
+func runUninstall(args []string, stdout io.Writer) error {
+	if err := rejectFlags("uninstall", args); err != nil {
 		return err
 	}
-	request := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if len(args) > 1 {
+		return errors.New("uninstall accepts at most one agent: codex, claude, opencode, pi, or all")
+	}
+	agent := strings.TrimSpace(firstArg(args))
+	if agent == "" {
+		agent = "all"
+	}
+
+	plans, err := UninstallPlans(agent)
+	if err != nil {
+		return err
+	}
+	for _, plan := range plans {
+		fmt.Fprintf(stdout, "target: %s\n", plan.Agent)
+		fmt.Fprintf(stdout, "file: %s\n", plan.Path)
+		changed, err := RemoveInstruction(plan.Path)
+		if err != nil {
+			return err
+		}
+		if changed {
+			fmt.Fprintln(stdout, "removed")
+		} else {
+			fmt.Fprintln(stdout, "already current")
+		}
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "binary: %s\n", executable)
+	if err := os.Remove(executable); err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintln(stdout, "already current")
+			return nil
+		}
+		return err
+	}
+	fmt.Fprintln(stdout, "removed")
+	return nil
+}
+
+func runStart(args []string, stdout io.Writer) error {
+	if err := rejectFlags("start", args); err != nil {
+		return err
+	}
+	request := strings.TrimSpace(strings.Join(args, " "))
 	if request == "" {
 		return errors.New("start requires a request")
 	}
 
-	selectedProfile := strings.TrimSpace(*profile)
-	if selectedProfile == "" {
-		selectedProfile = Classify(request).Profile
-	}
+	selectedProfile := Classify(request).Profile
 	workspace, err := StartWorkflow(".", request, selectedProfile)
 	if err != nil {
 		return err
@@ -157,26 +193,18 @@ func runValidate(args []string, stdout io.Writer) error {
 }
 
 func runInit(args []string, stdout io.Writer) error {
-	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	dryRun := fs.Bool("dry-run", false, "print integration instructions without writing")
-	command := fs.String("command", "kkt", "kkt command agents should run")
-	flagArgs, positionalArgs, err := splitInitArgs(args)
-	if err != nil {
+	if err := rejectFlags("init", args); err != nil {
 		return err
 	}
-	if err := fs.Parse(flagArgs); err != nil {
-		return err
-	}
-	if len(positionalArgs) > 1 {
+	if len(args) > 1 {
 		return errors.New("init accepts exactly one agent: codex, claude, opencode, pi, or all")
 	}
-	agent := strings.TrimSpace(firstArg(positionalArgs))
+	agent := strings.TrimSpace(firstArg(args))
 	if agent == "" {
 		return errors.New("init requires an agent: codex, claude, opencode, pi, or all")
 	}
 
-	plans, err := InitPlans(agent, *command)
+	plans, err := InitPlans(agent, "kkt")
 	if err != nil {
 		return err
 	}
@@ -184,11 +212,6 @@ func runInit(args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "target: %s\n", plan.Agent)
 		fmt.Fprintf(stdout, "file: %s\n", plan.Path)
 		if plan.Remove {
-			if *dryRun {
-				fmt.Fprintln(stdout, "---")
-				fmt.Fprintln(stdout, "remove managed KKT block if present")
-				continue
-			}
 			changed, err := RemoveInstruction(plan.Path)
 			if err != nil {
 				return err
@@ -197,14 +220,6 @@ func runInit(args []string, stdout io.Writer) error {
 				fmt.Fprintln(stdout, "removed")
 			} else {
 				fmt.Fprintln(stdout, "already current")
-			}
-			continue
-		}
-		if *dryRun {
-			fmt.Fprintln(stdout, "---")
-			fmt.Fprint(stdout, plan.Content)
-			if !strings.HasSuffix(plan.Content, "\n") {
-				fmt.Fprintln(stdout)
 			}
 			continue
 		}
@@ -221,29 +236,13 @@ func runInit(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func splitInitArgs(args []string) ([]string, []string, error) {
-	flags := []string{}
-	positionals := []string{}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "--dry-run":
-			flags = append(flags, arg)
-		case "--command":
-			if i+1 >= len(args) {
-				return nil, nil, errors.New("--command requires a value")
-			}
-			flags = append(flags, arg, args[i+1])
-			i++
-		default:
-			if strings.HasPrefix(arg, "-") {
-				flags = append(flags, arg)
-			} else {
-				positionals = append(positionals, arg)
-			}
+func rejectFlags(command string, args []string) error {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			return fmt.Errorf("%s does not accept flags: %s", command, arg)
 		}
 	}
-	return flags, positionals, nil
+	return nil
 }
 
 func firstArg(args []string) string {

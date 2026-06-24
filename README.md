@@ -150,11 +150,12 @@ Pi:          /skill:kkt
 OpenCode:    ask OpenCode to use the kkt skill
 ```
 
-CLI setup and debugging commands:
+CLI setup commands:
 
 ```bash
-kkt init codex --dry-run
-scripts/install-cli.sh --dry-run
+kkt --version
+kkt init codex
+kkt uninstall all
 ```
 
 Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL. If no matching binary is available, the installer falls back to building from source with Go.

@@ -16,8 +16,7 @@ Installs the Go kkt CLI. Add coding-agent instructions separately with
 
 Options:
   --bin-dir <path>          Install the kkt CLI here. Defaults to ~/.local/bin.
-  --dry-run                 Print operations without writing files.
-  --help, -h                Show this help.
+  --help                    Show this help.
 
 Environment:
   KKT_INSTALL_URL           Source archive URL. Defaults to main branch archive.
@@ -146,7 +145,6 @@ expand_home() {
 
 parse_args() {
   bin_dir="${KKT_BIN_DIR:-$HOME/.local/bin}"
-  dry_run="false"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -155,11 +153,7 @@ parse_args() {
         bin_dir="$(expand_home "$2")"
         shift 2
         ;;
-      --dry-run)
-        dry_run="true"
-        shift
-        ;;
-      --help|-h)
+      --help)
         usage
         exit 0
         ;;
@@ -178,17 +172,6 @@ install_cli() {
     binary_url="$(default_binary_url || true)"
   fi
 
-  if [ "$dry_run" = "true" ]; then
-    if [ -n "$binary_url" ]; then
-      log "[dry-run] cli: download kkt from $binary_url to $kkt_command"
-    elif command -v go >/dev/null 2>&1; then
-      log "[dry-run] cli: build kkt to $kkt_command"
-    else
-      fail "Could not install kkt CLI: no prebuilt binary supports $(uname -s)/$(uname -m), and Go is not installed."
-    fi
-    return
-  fi
-
   mkdir -p "$(dirname "$kkt_command")"
 
   if [ -n "$binary_url" ]; then
@@ -205,7 +188,7 @@ install_cli() {
   if command -v go >/dev/null 2>&1; then
     root="$(resolve_root)"
     log "Building kkt CLI to $kkt_command"
-    (cd "$root" && go build -o "$kkt_command" ./cmd/kkt)
+    (cd "$root" && go build -ldflags="-X github.com/dannylee1020/kkt/internal/workflow.Version=${KKT_VERSION:-dev}" -o "$kkt_command" ./cmd/kkt)
   else
     fail "Could not install kkt CLI: prebuilt binary unavailable and Go is not installed."
   fi

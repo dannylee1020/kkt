@@ -1,6 +1,9 @@
 package workflow
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestClassifyInvokesForImplementation(t *testing.T) {
 	result := Classify("implement a Go CLI for KKT workflow")
@@ -37,7 +40,10 @@ func TestClassifyUsesProvidedCommand(t *testing.T) {
 	if result.NextCommand == "" {
 		t.Fatal("NextCommand should be set")
 	}
-	if got, want := result.NextCommand[:len("/tmp/kkt ")], "/tmp/kkt "; got != want {
+	if got, want := result.NextCommand[:len("/tmp/kkt start ")], "/tmp/kkt start "; got != want {
 		t.Fatalf("NextCommand prefix = %q, want %q", got, want)
+	}
+	if strings.Contains(result.NextCommand, "--profile") {
+		t.Fatal("NextCommand should not include removed --profile flag")
 	}
 }

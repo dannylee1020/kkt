@@ -27,6 +27,30 @@ func InitPlans(agent, command string) ([]InitPlan, error) {
 	return InitPlansWithHome(agent, home, command)
 }
 
+func UninstallPlans(agent string) ([]InitPlan, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	return UninstallPlansWithHome(agent, home)
+}
+
+func UninstallPlansWithHome(agent, home string) ([]InitPlan, error) {
+	targets, err := expandAgent(agent)
+	if err != nil {
+		return nil, err
+	}
+
+	plans := []InitPlan{}
+	for _, target := range targets {
+		plans = append(plans, uninstallPlansForTarget(target, home)...)
+	}
+	if needsLegacyCleanup(targets) {
+		plans = append(plans, legacyCleanupPlans(home)...)
+	}
+	return dedupePlans(plans), nil
+}
+
 func InitPlansWithHome(agent, home, command string) ([]InitPlan, error) {
 	targets, err := expandAgent(agent)
 	if err != nil {
@@ -40,7 +64,7 @@ func InitPlansWithHome(agent, home, command string) ([]InitPlan, error) {
 	if needsLegacyCleanup(targets) {
 		plans = append(plans, legacyCleanupPlans(home)...)
 	}
-	return plans, nil
+	return dedupePlans(plans), nil
 }
 
 func initPlansForTarget(agent, home, command string) []InitPlan {
@@ -67,6 +91,24 @@ func initPlansForTarget(agent, home, command string) []InitPlan {
 			Content: instructionContent(agent, command),
 		},
 	}
+}
+
+func uninstallPlansForTarget(agent, home string) []InitPlan {
+	plans := []InitPlan{
+		{
+			Agent:  agent,
+			Path:   filepath.Join(home, instructionPath(agent)),
+			Remove: true,
+		},
+	}
+	if usesInstructionReference(agent) {
+		plans = append(plans, InitPlan{
+			Agent:  agent,
+			Path:   filepath.Join(home, kktInstructionPath(agent)),
+			Remove: true,
+		})
+	}
+	return plans
 }
 
 func expandAgent(agent string) ([]string, error) {
@@ -131,6 +173,20 @@ func legacyCleanupPlans(home string) []InitPlan {
 			Remove: true,
 		},
 	}
+}
+
+func dedupePlans(plans []InitPlan) []InitPlan {
+	seen := map[string]bool{}
+	deduped := []InitPlan{}
+	for _, plan := range plans {
+		key := fmt.Sprintf("%t:%s", plan.Remove, plan.Path)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		deduped = append(deduped, plan)
+	}
+	return deduped
 }
 
 func instructionReferenceContent(path string) string {

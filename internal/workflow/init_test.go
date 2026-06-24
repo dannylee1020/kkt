@@ -240,6 +240,36 @@ func TestRemoveInstructionIgnoresMissingOrUnmanagedFiles(t *testing.T) {
 	}
 }
 
+func TestUninstallPlansUsesGlobalAgentLocations(t *testing.T) {
+	home := t.TempDir()
+	plans, err := UninstallPlansWithHome("all", home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]bool{}
+	for _, plan := range plans {
+		if !plan.Remove {
+			t.Fatalf("uninstall plan should only contain remove actions: %s", plan.Path)
+		}
+		paths[plan.Path] = true
+	}
+	expectedPaths := []string{
+		filepath.Join(home, ".codex", "AGENTS.md"),
+		filepath.Join(home, ".codex", "KKT.md"),
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+		filepath.Join(home, ".claude", "KKT.md"),
+		filepath.Join(home, ".pi", "agent", "AGENTS.md"),
+		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+		filepath.Join(home, ".agents", "AGENTS.md"),
+		filepath.Join(home, ".agents", "KKT.md"),
+	}
+	for _, path := range expectedPaths {
+		if !paths[path] {
+			t.Fatalf("missing uninstall path: %s", path)
+		}
+	}
+}
+
 func planByPath(plans []InitPlan, path string) *InitPlan {
 	for i := range plans {
 		if plans[i].Path == path {
