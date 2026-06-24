@@ -85,7 +85,7 @@ where:
 
 ## Interface
 
-KKT is skill-first. Invoke `$kkt`, `$kkt-model`, or `$kkt-loop` from your coding agent. The CLI is the companion state tool those skills rely on for `.kkt/` scaffolding, status, next-step hints, validation, and legacy cleanup.
+KKT is skill-first. Invoke `$kkt`, `$kkt-model`, or `$kkt-loop` from your coding agent. The CLI is the tool those skills rely on for `.kkt/` scaffolding, status, state persistence and validation,
 
 | piece | what it offers | use when |
 | --- | --- | --- |
