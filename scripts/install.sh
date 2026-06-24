@@ -7,7 +7,7 @@ native_targets=("codex" "claude" "pi" "opencode")
 
 usage() {
   cat <<'EOF'
-kkt skills installer
+kkt installer
 
 Usage:
   scripts/install.sh [installer options]
@@ -19,20 +19,21 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade [installer options]
   curl -fsSL <install.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [installer options]
 
-Installs KKT skills only. Use scripts/install-cli.sh for the Go CLI.
+Installs KKT skills and the companion kkt CLI used for durable state.
 
 Common options:
   --target <name>   auto | codex | claude | pi | opencode | all
   --local [path]    Install to project-local skill directories. Defaults to cwd.
   --dir <path>      Install to an explicit skill root directory.
+  --bin-dir <path>  Install the kkt CLI here. Defaults to ~/.local/bin.
   --force           Overwrite existing KKT skill directories.
   --dry-run         Print operations without writing files.
   --help, -h        Show this help.
 
 Commands:
-  install           Install missing skills; conflicts if an existing skill differs.
-  upgrade           Remove known old KKT skill directories, then install the latest skills.
-  uninstall         Remove KKT skill directories.
+  install           Install missing skills and CLI; conflicts if an existing skill differs.
+  upgrade           Remove known old KKT skill directories, then install the latest skills and CLI.
+  uninstall         Remove KKT skill directories and CLI.
   doctor            Check that source skills are present.
 
 Default install auto-detects supported coding agents and writes to:
@@ -72,6 +73,10 @@ download_archive() {
 }
 
 default_archive_url() {
+  if [ -n "${KKT_VERSION:-}" ]; then
+    printf '%s\n' "https://github.com/dannylee1020/kkt/archive/refs/tags/${KKT_VERSION}.tar.gz"
+    return
+  fi
   printf '%s\n' "https://github.com/dannylee1020/kkt/archive/refs/heads/main.tar.gz"
 }
 
@@ -260,6 +265,7 @@ parse_args() {
   local_install="false"
   local_path="$(pwd -P)"
   explicit_dir=""
+  bin_dir="${KKT_BIN_DIR:-$HOME/.local/bin}"
   force="false"
   dry_run="false"
 
@@ -282,6 +288,11 @@ parse_args() {
       --dir)
         [ "$#" -ge 2 ] || fail "--dir requires a value."
         explicit_dir="$2"
+        shift 2
+        ;;
+      --bin-dir)
+        [ "$#" -ge 2 ] || fail "--bin-dir requires a value."
+        bin_dir="$(expand_home "$2")"
         shift 2
         ;;
       --force)
@@ -547,6 +558,37 @@ doctor() {
   printf 'ok: %s\n' "$source_skills_root"
 }
 
+install_cli() {
+  local kkt_command cli_installer
+  kkt_command="$(expand_home "$bin_dir")/kkt"
+  cli_installer="$root/scripts/install-cli.sh"
+
+  if [ "$dry_run" = "true" ]; then
+    printf '[dry-run] cli: %s\n' "$kkt_command"
+    return
+  fi
+
+  [ -f "$cli_installer" ] || fail "CLI installer not found: $cli_installer"
+  bash "$cli_installer" --bin-dir "$bin_dir"
+}
+
+uninstall_cli() {
+  local kkt_command
+  kkt_command="$(expand_home "$bin_dir")/kkt"
+
+  if [ "$dry_run" = "true" ]; then
+    printf '[dry-run] cli remove: %s\n' "$kkt_command"
+    return
+  fi
+
+  if [ -e "$kkt_command" ]; then
+    rm -f -- "$kkt_command"
+    printf '[removed] cli: %s\n' "$kkt_command"
+  else
+    printf '[removed] cli: already current (%s)\n' "$kkt_command"
+  fi
+}
+
 main() {
   parse_args "$@"
   root="$(resolve_root)"
@@ -580,6 +622,11 @@ main() {
   if [ "$command_failed" = "true" ]; then
     exit 1
   fi
+
+  case "$command_name" in
+    install|upgrade) install_cli ;;
+    uninstall) uninstall_cli ;;
+  esac
 }
 
 main "$@"

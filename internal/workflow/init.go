@@ -13,18 +13,9 @@ const (
 )
 
 type InitPlan struct {
-	Agent   string
-	Path    string
-	Content string
-	Remove  bool
-}
-
-func InitPlans(agent, command string) ([]InitPlan, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	return InitPlansWithHome(agent, home, command)
+	Agent  string
+	Path   string
+	Remove bool
 }
 
 func UninstallPlans(agent string) ([]InitPlan, error) {
@@ -49,48 +40,6 @@ func UninstallPlansWithHome(agent, home string) ([]InitPlan, error) {
 		plans = append(plans, legacyCleanupPlans(home)...)
 	}
 	return dedupePlans(plans), nil
-}
-
-func InitPlansWithHome(agent, home, command string) ([]InitPlan, error) {
-	targets, err := expandAgent(agent)
-	if err != nil {
-		return nil, err
-	}
-
-	plans := []InitPlan{}
-	for _, target := range targets {
-		plans = append(plans, initPlansForTarget(target, home, command)...)
-	}
-	if needsLegacyCleanup(targets) {
-		plans = append(plans, legacyCleanupPlans(home)...)
-	}
-	return dedupePlans(plans), nil
-}
-
-func initPlansForTarget(agent, home, command string) []InitPlan {
-	entryPath := filepath.Join(home, instructionPath(agent))
-	if usesInstructionReference(agent) {
-		kktPath := filepath.Join(home, kktInstructionPath(agent))
-		return []InitPlan{
-			{
-				Agent:   agent,
-				Path:    entryPath,
-				Content: instructionReferenceContent(kktPath),
-			},
-			{
-				Agent:   agent,
-				Path:    kktPath,
-				Content: instructionContent(agent, command),
-			},
-		}
-	}
-	return []InitPlan{
-		{
-			Agent:   agent,
-			Path:    entryPath,
-			Content: instructionContent(agent, command),
-		},
-	}
 }
 
 func uninstallPlansForTarget(agent, home string) []InitPlan {
@@ -187,82 +136,6 @@ func dedupePlans(plans []InitPlan) []InitPlan {
 		deduped = append(deduped, plan)
 	}
 	return deduped
-}
-
-func instructionReferenceContent(path string) string {
-	return strings.Join([]string{
-		instructionStart,
-		"@" + path,
-		instructionEnd,
-		"",
-	}, "\n")
-}
-
-func instructionContent(agent, command string) string {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		command = "kkt"
-	}
-	template := strings.Join([]string{
-		"%s",
-		"# KKT Workflow",
-		"",
-		"Use KKT as an advisory workflow tool for non-trivial coding work.",
-		"",
-		"Before implementation-heavy requests, run:",
-		"",
-		"```bash",
-		"%s classify \"<user request>\"",
-		"```",
-		"",
-		"If the decision is `invoke`, run the suggested start command, inspect the generated `.kkt/model/<run>/`, `.kkt/loop/<run>/`, or compact `.kkt/kkt.yaml` workspace, and follow its state contract.",
-		"",
-		"During KKT-managed work:",
-		"",
-		"- keep using this coding-agent session as the active coding agent;",
-		"- do not spawn KKT subagents or assume detached harness behavior;",
-		"- complete discovery before modeling;",
-		"- show the selected model and get explicit approval before file edits;",
-		"- for loop work, update `.kkt/loop/<run>/progress.md` and `.kkt/loop/<run>/evidence.md` as work proceeds;",
-		"- run `%s validate` before the final response when a KKT workspace is active;",
-		"- if KKT fails, continue normally and report the failure.",
-		"",
-		"Target integration: %s.",
-		"%s",
-		"",
-	}, "\n")
-	return fmt.Sprintf(template, instructionStart, command, command, agent, instructionEnd)
-}
-
-func WriteInstruction(path, content string) (bool, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
-	}
-	existingBytes, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return false, err
-	}
-	existing := string(existingBytes)
-	if strings.Contains(existing, instructionStart) && strings.Contains(existing, instructionEnd) {
-		start := strings.Index(existing, instructionStart)
-		end := strings.Index(existing, instructionEnd)
-		end += len(instructionEnd)
-		next := existing[:start] + strings.TrimSpace(content) + existing[end:]
-		if next == existing {
-			return false, nil
-		}
-		return true, os.WriteFile(path, []byte(next), 0o644)
-	}
-
-	next := strings.TrimRight(existing, "\n")
-	if next != "" {
-		next += "\n\n"
-	}
-	next += strings.TrimSpace(content) + "\n"
-	if next == existing {
-		return false, nil
-	}
-	return true, os.WriteFile(path, []byte(next), 0o644)
 }
 
 func RemoveInstruction(path string) (bool, error) {

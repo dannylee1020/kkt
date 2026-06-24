@@ -8,9 +8,18 @@ Layers are internal contract boundaries. They are not public skills and should n
 
 | Tier | Skill | Durable files | Use when |
 | --- | --- | --- | --- |
-| Daily | `kkt` | none by default; optional `.kkt/kkt.yaml` | the task is small enough that rich Markdown context would be overhead. |
+| Plan | `kkt` | none by default; optional `.kkt/kkt.yaml` | the task is small enough that rich Markdown context would be overhead. |
 | Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` | the output is a durable model or decision brief before execution. |
 | Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | the task is long-running, multi-step, or needs continuation. |
+
+Use the `kkt` CLI for deterministic state scaffolding and validation:
+
+```text
+kkt start plan "<request>"
+kkt start model "<request>"
+kkt start loop "<request>"
+kkt validate
+```
 
 ## Canonical Rule
 
@@ -25,8 +34,8 @@ Layers are internal contract boundaries. They are not public skills and should n
 
 ```yaml
 schema_version: 1
-workspace_type: daily | model | loop
-profile: daily | model | loop
+workspace_type: plan | model | loop
+profile: plan | model | loop
 status: initialized | modeling | approved | executing | validating | complete | blocked
 active_layer: intent | discovery | modeling | execution | validation
 layers:
@@ -82,7 +91,7 @@ approval:
 stop_conditions: []
 ```
 
-Omit artifact keys that do not apply to the tier. For daily `kkt`, a compact `kkt.yaml` can keep layer summaries inline and leave Markdown artifacts empty or absent.
+Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml` can keep layer summaries inline and leave Markdown artifacts empty or absent.
 
 ## Layer Handoff Rules
 

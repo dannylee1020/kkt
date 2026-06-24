@@ -6,7 +6,7 @@ Every layer must produce a contract-shaped output that the next layer can consum
 
 ## Method Profiles
 
-### Daily Profile
+### Plan Profile
 
 Use for ordinary `$kkt` implementation work.
 

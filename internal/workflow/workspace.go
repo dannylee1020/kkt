@@ -32,7 +32,7 @@ type ValidationResult struct {
 }
 
 func StartWorkflow(root, request, profile string) (Workspace, error) {
-	if profile != "daily" && profile != "loop" && profile != "model" {
+	if profile != "plan" && profile != "loop" && profile != "model" {
 		return Workspace{}, fmt.Errorf("unsupported profile %q", profile)
 	}
 	now := time.Now().UTC()
@@ -79,7 +79,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", errors.New("no .kkt workspace found; run kkt start first")
+			return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop first")
 		}
 		return "", err
 	}
@@ -115,7 +115,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		}
 	}
 	if len(dirs) == 0 {
-		return "", errors.New("no .kkt workspace found; run kkt start first")
+		return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop first")
 	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return dirs[i].sortKey < dirs[j].sortKey
@@ -179,12 +179,12 @@ func NextInstruction(state State) string {
 	case "intent":
 		return "next: complete intent.md, then inspect the repo and record discovery.md"
 	case "discovery":
-		if state.WorkspaceType == "daily" {
+		if state.WorkspaceType == "plan" {
 			return "next: keep compact state in .kkt/kkt.yaml, inspect the repo, and record the selected model before edits"
 		}
 		return "next: complete discovery.md with repo facts, constraints, validation paths, and unknowns"
 	case "modeling":
-		if state.WorkspaceType == "daily" {
+		if state.WorkspaceType == "plan" {
 			return "next: record the selected model in .kkt/kkt.yaml and get explicit approval before edits"
 		}
 		return "next: complete model.md, show the selected model, and get explicit approval before edits"
@@ -227,11 +227,11 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 
 func stateYAML(request, profile string, now time.Time) string {
 	escapedRequest := strings.ReplaceAll(request, `"`, `\"`)
-	if profile == "daily" {
+	if profile == "plan" {
 		return fmt.Sprintf(`schema_version: 1
 workflow_type: kkt
-workspace_type: daily
-profile: daily
+workspace_type: plan
+profile: plan
 status: modeling
 active_layer: modeling
 created_at: %s
@@ -240,7 +240,7 @@ layers:
   intent:
     status: complete
     method: goal_anti_goal
-    summary: "Initial user request captured by kkt start."
+    summary: "Initial user request captured by kkt start plan."
   discovery:
     status: pending
     method: traceability_matrix
@@ -275,7 +275,7 @@ layers:
   intent:
     status: complete
     method: goal_anti_goal
-    summary: "Initial user request captured by kkt start."
+    summary: "Initial user request captured by kkt start model."
     artifact: intent.md
   discovery:
     status: pending
@@ -313,7 +313,7 @@ layers:
   intent:
     status: complete
     method: goal_anti_goal
-    summary: "Initial user request captured by kkt start."
+    summary: "Initial user request captured by kkt start loop."
     artifact: intent.md
   discovery:
     status: pending
@@ -363,7 +363,7 @@ stop_conditions:
 
 func workspacePath(base, profile, slug string) string {
 	switch profile {
-	case "daily":
+	case "plan":
 		return base
 	case "model":
 		return filepath.Join(base, "model", slug)
@@ -374,7 +374,7 @@ func workspacePath(base, profile, slug string) string {
 
 func currentPointer(profile, slug string) string {
 	switch profile {
-	case "daily":
+	case "plan":
 		return "."
 	case "model":
 		return filepath.Join("model", slug)
@@ -387,7 +387,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	files := map[string]string{
 		"kkt.yaml": stateYAML(request, profile, now),
 	}
-	if profile == "daily" {
+	if profile == "plan" {
 		return files
 	}
 	files["intent.md"] = intentMarkdown(request)
@@ -405,7 +405,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 
 func requiredFiles(workspaceType string) []string {
 	switch workspaceType {
-	case "daily":
+	case "plan":
 		return []string{"kkt.yaml"}
 	case "model":
 		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md"}

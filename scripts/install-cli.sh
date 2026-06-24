@@ -11,8 +11,8 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install-cli.sh | bash -s -- [options]
   curl -fsSL <install-cli.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [options]
 
-Installs the Go kkt CLI. Add coding-agent instructions separately with
-`kkt init <agent>`.
+Installs the Go kkt CLI. KKT skills can use this binary for deterministic
+.kkt state scaffolding, status, next-step hints, and validation.
 
 Options:
   --bin-dir <path>          Install the kkt CLI here. Defaults to ~/.local/bin.
@@ -100,6 +100,10 @@ default_binary_url() {
 }
 
 default_archive_url() {
+  if [ -n "${KKT_VERSION:-}" ]; then
+    printf '%s\n' "https://github.com/dannylee1020/kkt/archive/refs/tags/${KKT_VERSION}.tar.gz"
+    return
+  fi
   printf '%s\n' "https://github.com/dannylee1020/kkt/archive/refs/heads/main.tar.gz"
 }
 

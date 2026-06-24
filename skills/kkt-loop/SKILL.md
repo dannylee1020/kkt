@@ -24,6 +24,8 @@ Create files under the current repo:
 .kkt/loop/<slug>/
 ```
 
+Use `kkt start loop "<user request>"` after approval to create the workspace, then update the generated files as the loop proceeds.
+
 Use a short filesystem-safe slug derived from the objective.
 
 ## Workspace Files
@@ -59,7 +61,7 @@ Always create:
 5. Ask only when an unresolved field is an owner decision that materially changes feasibility, product behavior, risk, scope, approval, or execution mode.
 6. Build the optimization model and derive the execution contract from the intent frame and discovery results using the loop profile.
 7. Show the final modeling result and wait for explicit user approval.
-8. Write the durable workspace only after approval.
+8. Write the durable workspace only after approval with `kkt start loop "<user request>"`.
 9. Launch `create_goal` if goal tools are available, no active goal exists, and the user asked to run now. Otherwise output the exact `/goal` command.
 10. During execution, before each work segment:
    - read `kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `evidence.md`, and `progress.md`;

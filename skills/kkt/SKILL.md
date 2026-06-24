@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill for normal coding work that benefits from stricter planning than default plan mode. Apply Karush-Kuhn-Tucker-inspired constrained modeling as a discipline, not as numeric optimization.
 
-Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and the internal `references/layers/` contracts only when the request needs method selection beyond the daily profile.
+Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and the internal `references/layers/` contracts only when the request needs method selection beyond the plan profile.
 
 ## Core Rule
 
@@ -20,7 +20,7 @@ Intake before modeling. Model before editing. Show the final modeling result and
 2. Before asking, apply the owner-decision filter: inspect discoverable facts locally, choose conservative reversible defaults when risk is low and record them as assumptions, and ask only for owner decisions that materially change product behavior, risk, scope, approval, or execution mode. Do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
 3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues to discover repo facts, constraints, validation paths, and likely technical non-goals before forming the model.
 4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions. Ask only when a high-impact product choice, irreversible tradeoff, external dependency, destructive action, scope expansion, or infeasible ambiguity remains.
-5. Build a compact optimization model using the daily profile:
+5. Build a compact optimization model using the plan profile:
    - request intake;
    - objective;
    - system state;
@@ -52,7 +52,7 @@ Intake before modeling. Model before editing. Show the final modeling result and
 
 For small tasks, keep the model brief. Do not create durable files unless the user asks, the task becomes long-running, or `$kkt-loop` is more appropriate.
 
-When durable state is useful for normal `$kkt` work, use the daily tier from `references/state-contract.md`: a single `.kkt/kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Do not create Markdown layer artifacts in the daily tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
+When durable state is useful for normal `$kkt` work, use the plan tier from `references/state-contract.md`: a single `.kkt/kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Use `kkt start plan "<user request>"` to create that state and `kkt validate` before the final response. Do not create Markdown layer artifacts in the plan tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
 
 The intent, discovery, modeling, execution, and validation layers are internal contract boundaries, not user-facing skills. Run them inside this skill when needed; do not ask the user to invoke layer names directly.
 

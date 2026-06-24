@@ -3,12 +3,13 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestStartWorkflowCreatesDailyState(t *testing.T) {
+func TestStartWorkflowCreatesPlanState(t *testing.T) {
 	root := t.TempDir()
-	workspace, err := StartWorkflow(root, "implement KKT workflow CLI", "daily")
+	workspace, err := StartWorkflow(root, "implement KKT workflow CLI", "plan")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +28,13 @@ func TestStartWorkflowCreatesDailyState(t *testing.T) {
 	}
 	if len(current) == 0 {
 		t.Fatal("current pointer is empty")
+	}
+	state, err := os.ReadFile(filepath.Join(workspace.Path, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(state); !strings.Contains(text, "workspace_type: plan") || !strings.Contains(text, "profile: plan") {
+		t.Fatalf("plan state did not use plan profile:\n%s", text)
 	}
 }
 

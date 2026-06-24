@@ -86,6 +86,8 @@ For substantial modeling work, write a modeling artifact only when useful or req
 .kkt/model/<slug>/model.md
 ```
 
+Use `kkt start model "<user request>"` to create this workspace and `kkt validate` before returning the selected model.
+
 Use `kkt.yaml` as the canonical state index and status record. Use the Markdown files for rich intent, discovery, and modeling context that would be lossy in YAML.
 
 Do not create execution files unless switching to `$kkt-loop`.

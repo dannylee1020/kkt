@@ -27,10 +27,9 @@ func TestRunRejectsRemovedAliasesAndFlags(t *testing.T) {
 		{"-h"},
 		{"-v"},
 		{"version"},
-		{"classify", "--json", "implement a feature"},
-		{"start", "--profile", "daily", "implement a feature"},
-		{"init", "--dry-run", "codex"},
-		{"init", "--command", "/tmp/kkt", "codex"},
+		{"classify", "implement a feature"},
+		{"start", "--profile", "plan", "implement a feature"},
+		{"init", "codex"},
 		{"uninstall", "--dry-run"},
 		{"uninstall", "--keep-binary"},
 	}
@@ -41,5 +40,26 @@ func TestRunRejectsRemovedAliasesAndFlags(t *testing.T) {
 				t.Fatal("expected removed alias or flag to be rejected")
 			}
 		})
+	}
+}
+
+func TestRunStartRequiresExplicitProfile(t *testing.T) {
+	var stdout bytes.Buffer
+	err := Run([]string{"start", "implement", "a", "feature"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected start without explicit profile to fail")
+	}
+	if !strings.Contains(err.Error(), "unsupported profile") {
+		t.Fatalf("error = %q, want unsupported profile", err.Error())
+	}
+}
+
+func TestRunRejectsDailyProfile(t *testing.T) {
+	err := Run([]string{"start", "daily", "implement", "a", "feature"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected daily profile to be rejected")
+	}
+	if !strings.Contains(err.Error(), "unsupported profile") {
+		t.Fatalf("error = %q, want unsupported profile", err.Error())
 	}
 }

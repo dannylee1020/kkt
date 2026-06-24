@@ -83,79 +83,56 @@ where:
 - the selected plan is the best feasible plan, not the first plausible plan
 - validation is the certificate that the selected plan satisfies the model
 
-## Choose a Surface
+## Interface
 
-| surface | what it offers | install | use when |
-| --- | --- | --- | --- |
-| Skills | Lightweight manual KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | `scripts/install.sh` | You want lightweight, user controlled skill invocation and a small setup surface. |
-| CLI | Agent-invoked KKT workflow state through global agent instructions and `.kkt/` files. | `scripts/install-cli.sh`, then `kkt init <agent>` | You want the coding agent to call KKT during normal coding work. |
+KKT is skill-first. Invoke `$kkt`, `$kkt-model`, or `$kkt-loop` from your coding agent. The CLI is the companion state tool those skills rely on for `.kkt/` scaffolding, status, next-step hints, validation, and legacy cleanup.
+
+| piece | what it offers | use when |
+| --- | --- | --- |
+| Skills | Primary KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | You want KKT to guide planning, approval, implementation, and validation. |
+| CLI | Deterministic `.kkt/` state scaffolding and validation used by the skills. | Durable state needs to stay consistent across KKT layers and continuations. |
 
 
 ## Install
 
-Install skills:
+Install KKT:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-The skills installer auto-detects supported coding agents and installs KKT skills into their global skill directories. Use an explicit target when needed:
+The installer auto-detects supported coding agents, installs KKT skills into their global skill directories, and installs the companion CLI. Use an explicit target or binary location when needed:
 
 ```bash
 scripts/install.sh --target codex
 scripts/install.sh --target claude
 scripts/install.sh --target all
-```
-
-Install the CLI:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install-cli.sh | bash
-kkt init <agent>
+scripts/install.sh --bin-dir ~/.local/bin
 ```
 
 From a checkout:
 
 ```bash
 scripts/install.sh
-scripts/install-cli.sh --bin-dir ~/.local/bin
-kkt init codex
 ```
-
-Supported CLI setup:
-
-| agent | setup command | integration |
-| --- | --- | --- |
-| Codex | `kkt init codex` | `~/.codex/AGENTS.md` references `~/.codex/KKT.md` |
-| Claude Code | `kkt init claude` | `~/.claude/CLAUDE.md` references `~/.claude/KKT.md` |
-| Pi | `kkt init pi` | `~/.pi/agent/AGENTS.md` inline instructions |
-| OpenCode | `kkt init opencode` | `~/.config/opencode/AGENTS.md` inline instructions |
-| All | `kkt init all` | creates the documented instruction files for each agent |
-
-KKT keeps Codex and Claude Code entry files small with adjacent `KKT.md` references. Pi and OpenCode receive inline instructions because their global `AGENTS.md` loaders do not document `@.../KKT.md` imports.
 
 ## Quick Start
 
-| surface | normal use | notes |
-| --- | --- | --- |
-| Skills | `$kkt <feature to implement>` | Use `$kkt-model` for deeper architecture tradeoffs and `$kkt-loop` for longer work. |
-| CLI | Ask your coding agent for coding work normally. | The agent calls `kkt` when its project instructions say to use KKT. |
+Invoke the skill directly:
 
-Skill invocation varies by agent:
+```text
+$kkt <feature to implement>
+$kkt-model <architecture or tradeoff question>
+$kkt-loop <long-running implementation>
+```
+
+Skill invocation syntax varies by agent:
 
 ```text
 Codex:       $kkt
 Claude Code: /kkt
 Pi:          /skill:kkt
 OpenCode:    ask OpenCode to use the kkt skill
-```
-
-CLI setup commands:
-
-```bash
-kkt --version
-kkt init codex
-kkt uninstall all
 ```
 
 Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL. If no matching binary is available, the installer falls back to building from source with Go.
@@ -169,7 +146,7 @@ Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an e
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
 | `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
 
-All durable state lives under `.kkt/`. `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while daily `$kkt` stays compact.
+All durable state lives under `.kkt/`. `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
 
 ## Request Shape
 

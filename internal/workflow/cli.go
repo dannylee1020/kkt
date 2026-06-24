@@ -14,16 +14,14 @@ const usageText = `KKT Workflow CLI
 
 Usage:
   kkt --version
-  kkt classify <request>
-  kkt start <request>
+  kkt start plan|model|loop <request>
   kkt status [path]
   kkt next [path]
   kkt validate [path]
-  kkt init codex|claude|opencode|pi|all
   kkt uninstall [codex|claude|opencode|pi|all]
 
-KKT coordinates one existing coding agent session. It does not own the TUI,
-spawn subagents, route models, or run a detached harness.
+KKT skills own the workflow. This CLI handles deterministic .kkt state
+scaffolding, status, next-step hints, validation, and legacy cleanup.
 `
 
 func Run(args []string, stdout, stderr io.Writer) error {
@@ -37,8 +35,6 @@ func Run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	switch args[0] {
-	case "classify":
-		return runClassify(args[1:], stdout)
 	case "start":
 		return runStart(args[1:], stdout)
 	case "status":
@@ -47,32 +43,11 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runNext(args[1:], stdout)
 	case "validate":
 		return runValidate(args[1:], stdout)
-	case "init":
-		return runInit(args[1:], stdout)
 	case "uninstall":
 		return runUninstall(args[1:], stdout)
 	default:
 		return fmt.Errorf("unsupported command %q\n\n%s", args[0], usageText)
 	}
-}
-
-func runClassify(args []string, stdout io.Writer) error {
-	if err := rejectFlags("classify", args); err != nil {
-		return err
-	}
-	request := strings.TrimSpace(strings.Join(args, " "))
-	if request == "" {
-		return errors.New("classify requires a request")
-	}
-
-	result := ClassifyWithCommand(request, os.Args[0])
-	fmt.Fprintf(stdout, "decision: %s\n", result.Decision)
-	fmt.Fprintf(stdout, "profile: %s\n", result.Profile)
-	fmt.Fprintf(stdout, "reason: %s\n", result.Reason)
-	if result.NextCommand != "" {
-		fmt.Fprintf(stdout, "next: %s\n", result.NextCommand)
-	}
-	return nil
 }
 
 func runUninstall(args []string, stdout io.Writer) error {
@@ -125,12 +100,15 @@ func runStart(args []string, stdout io.Writer) error {
 	if err := rejectFlags("start", args); err != nil {
 		return err
 	}
-	request := strings.TrimSpace(strings.Join(args, " "))
+	if len(args) < 2 {
+		return errors.New("start requires a profile and request: plan, model, or loop")
+	}
+	selectedProfile := strings.TrimSpace(args[0])
+	request := strings.TrimSpace(strings.Join(args[1:], " "))
 	if request == "" {
 		return errors.New("start requires a request")
 	}
 
-	selectedProfile := Classify(request).Profile
 	workspace, err := StartWorkflow(".", request, selectedProfile)
 	if err != nil {
 		return err
@@ -192,50 +170,6 @@ func runValidate(args []string, stdout io.Writer) error {
 	return errors.New("workspace validation failed")
 }
 
-func runInit(args []string, stdout io.Writer) error {
-	if err := rejectFlags("init", args); err != nil {
-		return err
-	}
-	if len(args) > 1 {
-		return errors.New("init accepts exactly one agent: codex, claude, opencode, pi, or all")
-	}
-	agent := strings.TrimSpace(firstArg(args))
-	if agent == "" {
-		return errors.New("init requires an agent: codex, claude, opencode, pi, or all")
-	}
-
-	plans, err := InitPlans(agent, "kkt")
-	if err != nil {
-		return err
-	}
-	for _, plan := range plans {
-		fmt.Fprintf(stdout, "target: %s\n", plan.Agent)
-		fmt.Fprintf(stdout, "file: %s\n", plan.Path)
-		if plan.Remove {
-			changed, err := RemoveInstruction(plan.Path)
-			if err != nil {
-				return err
-			}
-			if changed {
-				fmt.Fprintln(stdout, "removed")
-			} else {
-				fmt.Fprintln(stdout, "already current")
-			}
-			continue
-		}
-		changed, err := WriteInstruction(plan.Path, plan.Content)
-		if err != nil {
-			return err
-		}
-		if changed {
-			fmt.Fprintln(stdout, "updated")
-		} else {
-			fmt.Fprintln(stdout, "already current")
-		}
-	}
-	return nil
-}
-
 func rejectFlags(command string, args []string) error {
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
@@ -254,7 +188,7 @@ func firstArg(args []string) string {
 
 func startInstruction(profile string) string {
 	switch profile {
-	case "daily":
+	case "plan":
 		return "inspect relevant code/docs, keep compact state in .kkt/kkt.yaml, then request approval before edits"
 	case "model":
 		return "inspect relevant code/docs, complete discovery.md, then update model.md with the selected model"
