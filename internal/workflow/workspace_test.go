@@ -67,11 +67,18 @@ func TestStartWorkflowCreatesLoopWorkspace(t *testing.T) {
 	if got, want := filepath.Dir(workspace.Path), filepath.Join(root, ".kkt", "loop"); got != want {
 		t.Fatalf("workspace parent = %q, want %q", got, want)
 	}
-	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md"}
+	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
 	for _, name := range required {
 		if _, err := os.Stat(filepath.Join(workspace.Path, name)); err != nil {
 			t.Fatalf("missing %s: %v", name, err)
 		}
+	}
+	state, err := os.ReadFile(filepath.Join(workspace.Path, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(state); !strings.Contains(text, "loop_state:") || !strings.Contains(text, "acceptance_criteria:") {
+		t.Fatalf("loop state block missing from kkt.yaml:\n%s", text)
 	}
 }
 

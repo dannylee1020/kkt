@@ -34,7 +34,7 @@ Use for `$kkt-model` and complex planning.
 Use for `$kkt-loop`.
 
 - Front-load deeper modeling before creating the durable workspace.
-- Record discovery, coupling, method choice, selected model, and execution contract in the workspace.
+- Record discovery, coupling, method choice, selected model, and execution contract in the workspace through the `kkt` CLI.
 - Show the final modeling result and wait for approval before workspace creation or execution.
 - During continuation, re-optimize only when new evidence changes feasibility, constraints, objective fit, or validation feasibility.
 

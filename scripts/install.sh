@@ -26,12 +26,12 @@ Common options:
   --local [path]    Install to project-local skill directories. Defaults to cwd.
   --dir <path>      Install to an explicit skill root directory.
   --bin-dir <path>  Install the kkt CLI here. Defaults to ~/.local/bin.
-  --force           Overwrite existing KKT skill directories.
+  --force           Overwrite existing KKT skill directories during install.
   --dry-run         Print operations without writing files.
   --help, -h        Show this help.
 
 Commands:
-  install           Install missing skills and CLI; conflicts if an existing skill differs.
+  install           Install missing skills and CLI; keep existing skills unchanged.
   upgrade           Remove known old KKT skill directories, then install the latest skills and CLI.
   uninstall         Remove KKT skill directories and CLI.
   doctor            Check that source skills are present.
@@ -106,8 +106,8 @@ resolve_root() {
   install_url="${KKT_INSTALL_URL:-$(default_archive_url)}"
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kkt-install.XXXXXX")"
   archive="$tmp_dir/kkt.tar.gz"
-  log "Downloading kkt from $install_url"
   download_archive "$install_url" "$archive"
+  log "source: downloaded $install_url"
   extract_archive "$archive" "$tmp_dir/src"
   printf '%s\n' "$tmp_dir/src"
 }
@@ -354,7 +354,7 @@ copy_skill() {
       return
     fi
     if [ "$force" != "true" ]; then
-      record_operation "conflict" "$name" "$target_dir"
+      record_operation "keep" "$name" "$target_dir"
       return
     fi
     record_operation "overwrite" "$name" "$target_dir"
@@ -362,14 +362,6 @@ copy_skill() {
   fi
 
   record_operation "copy" "$name" "$target_dir"
-}
-
-has_conflicts() {
-  local action
-  for action in "${operation_actions[@]}"; do
-    [ "$action" = "conflict" ] && return 0
-  done
-  return 1
 }
 
 install_root() {
@@ -380,18 +372,6 @@ install_root() {
   for name in "${skill_names[@]}"; do
     copy_skill "$name" "$root_dir"
   done
-
-  if has_conflicts; then
-    local i
-    for i in "${!operation_actions[@]}"; do
-      if [ "${operation_actions[$i]}" = "conflict" ]; then
-        log "Conflict: ${operation_targets[$i]} (target differs; run upgrade or rerun install with --force)"
-      fi
-    done
-    log "No files were changed for this target."
-    command_failed="true"
-    return
-  fi
 
   if [ "$dry_run" != "true" ]; then
     local i source target_dir
@@ -491,21 +471,15 @@ print_operations() {
   local command="$1"
   local label="$2"
   local root_dir="$3"
-  local prefix
+  local suffix=""
   if [ "$dry_run" = "true" ]; then
-    prefix="[dry-run]"
-  elif [ "$command" = "uninstall" ]; then
-    prefix="[removed]"
-  elif [ "$command" = "upgrade" ]; then
-    prefix="[upgraded]"
-  else
-    prefix="[installed]"
+    suffix=" (dry-run)"
   fi
 
-  printf '%s %s: %s\n' "$prefix" "$label" "$root_dir"
+  printf 'skills %s%s: %s\n' "$label" "$suffix" "$root_dir"
 
   if [ "$command" = "upgrade" ]; then
-    print_summary_line "installed" "$(printf '%s, %s, %s\n' "${skill_names[0]}" "${skill_names[1]}" "${skill_names[2]}")"
+    print_summary_line "installed" "$(names_for_action copy || true)"
     local removed_legacy=()
     local i
     for i in "${!operation_actions[@]}"; do
@@ -539,17 +513,17 @@ print_operations() {
     return
   fi
 
-  local conflicts installed updated current
-  conflicts="$(names_for_action conflict || true)"
+  local installed updated current kept
   installed="$(names_for_action copy || true)"
   updated="$(names_for_action overwrite || true)"
+  kept="$(names_for_action keep || true)"
   current="$(names_for_action skip || true)"
-  print_summary_line "conflicts" "$conflicts"
-  [ -n "$conflicts" ] && return
   print_summary_line "installed" "$installed"
   print_summary_line "updated" "$updated"
-  if [ -z "$installed" ] && [ -z "$updated" ]; then
-    print_summary_line "already current" "$current"
+  print_summary_line "current" "$current"
+  print_summary_line "kept existing" "$kept"
+  if [ -n "$kept" ]; then
+    print_summary_line "next" "run scripts/install.sh upgrade to replace existing skills"
   fi
 }
 
@@ -564,7 +538,7 @@ install_cli() {
   cli_installer="$root/scripts/install-cli.sh"
 
   if [ "$dry_run" = "true" ]; then
-    printf '[dry-run] cli: %s\n' "$kkt_command"
+    printf 'cli: would install %s\n' "$kkt_command"
     return
   fi
 
@@ -577,15 +551,15 @@ uninstall_cli() {
   kkt_command="$(expand_home "$bin_dir")/kkt"
 
   if [ "$dry_run" = "true" ]; then
-    printf '[dry-run] cli remove: %s\n' "$kkt_command"
+    printf 'cli: would remove %s\n' "$kkt_command"
     return
   fi
 
   if [ -e "$kkt_command" ]; then
     rm -f -- "$kkt_command"
-    printf '[removed] cli: %s\n' "$kkt_command"
+    printf 'cli: removed %s\n' "$kkt_command"
   else
-    printf '[removed] cli: already current (%s)\n' "$kkt_command"
+    printf 'cli: not installed %s\n' "$kkt_command"
   fi
 }
 
@@ -601,8 +575,6 @@ main() {
 
   need_command diff
   resolve_roots
-  command_failed="false"
-
   local i root_dir label
   for i in "${!root_paths[@]}"; do
     root_dir="${root_paths[$i]}"
@@ -618,10 +590,6 @@ main() {
     esac
     print_operations "$command_name" "$label" "$root_dir"
   done
-
-  if [ "$command_failed" = "true" ]; then
-    exit 1
-  fi
 
   case "$command_name" in
     install|upgrade) install_cli ;;

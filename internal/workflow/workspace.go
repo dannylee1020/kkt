@@ -177,21 +177,21 @@ func ReadState(workspace string) (State, error) {
 func NextInstruction(state State) string {
 	switch state.ActiveLayer {
 	case "intent":
-		return "next: complete intent.md, then inspect the repo and record discovery.md"
+		return "next: record intent with kkt intent, then inspect the repo and record discovery with kkt discovery"
 	case "discovery":
 		if state.WorkspaceType == "plan" {
-			return "next: keep compact state in .kkt/kkt.yaml, inspect the repo, and record the selected model before edits"
+			return "next: inspect the repo, then record the selected model with kkt model before edits"
 		}
-		return "next: complete discovery.md with repo facts, constraints, validation paths, and unknowns"
+		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery"
 	case "modeling":
 		if state.WorkspaceType == "plan" {
-			return "next: record the selected model in .kkt/kkt.yaml and get explicit approval before edits"
+			return "next: record the selected model with kkt model and get explicit approval before edits"
 		}
-		return "next: complete model.md, show the selected model, and get explicit approval before edits"
+		return "next: record the selected model with kkt model, show it, and get explicit approval before edits"
 	case "execution":
-		return "next: execute only the approved plan and update progress.md"
+		return "next: execute only the approved plan and record progress with kkt progress"
 	case "validation":
-		return "next: run validation, update evidence.md, and finish with a constraint audit"
+		return "next: run validation, record evidence with kkt evidence, then finish with kkt done"
 	default:
 		return "next: inspect kkt.yaml and continue from the active layer"
 	}
@@ -212,7 +212,7 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 			result.Issues = append(result.Issues, fmt.Sprintf("missing %s", name))
 			continue
 		}
-		if info.Size() == 0 {
+		if info.Size() == 0 && name != "events.jsonl" {
 			result.OK = false
 			result.Issues = append(result.Issues, fmt.Sprintf("empty %s", name))
 		}
@@ -221,6 +221,36 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 	if state.WorkspaceType == "loop" && err == nil && strings.Contains(string(evidence), "Status: pending") {
 		result.OK = false
 		result.Issues = append(result.Issues, "evidence.md is still pending")
+	}
+	if state.WorkspaceType == "loop" {
+		loop, loopErr := readLoopState(workspace)
+		if loopErr != nil {
+			result.OK = false
+			result.Issues = append(result.Issues, loopErr.Error())
+		} else {
+			for _, task := range loop.Tasks {
+				if task.Status != "done" && task.Status != "skipped" {
+					result.OK = false
+					result.Issues = append(result.Issues, fmt.Sprintf("task %s is %s", task.ID, task.Status))
+				}
+			}
+			for _, criterion := range loop.AcceptanceCriteria {
+				if criterion.Status != "satisfied" {
+					result.OK = false
+					result.Issues = append(result.Issues, fmt.Sprintf("criterion %s is %s", criterion.ID, criterion.Status))
+				}
+			}
+			for _, stop := range loop.StopConditions {
+				if stop.Status == "active" {
+					result.OK = false
+					result.Issues = append(result.Issues, fmt.Sprintf("stop condition active: %s", stop.Text))
+				}
+			}
+			if len(loop.Evidence) == 0 {
+				result.OK = false
+				result.Issues = append(result.Issues, "no loop evidence recorded")
+			}
+		}
 	}
 	return result, nil
 }
@@ -350,6 +380,7 @@ artifact_refs:
   progress: progress.md
   evidence: evidence.md
   notes: notes.md
+  events: events.jsonl
 approval:
   required: true
   status: pending
@@ -358,6 +389,21 @@ stop_conditions:
   - "No feasible plan satisfies hard constraints."
   - "User does not approve the selected model."
   - "Destructive action, credentials, paid service, or external access is required."
+loop_state:
+  current_task: ""
+  tasks:
+  acceptance_criteria:
+  evidence:
+  stop_conditions:
+    - id: "no-feasible-plan"
+      text: "No feasible plan satisfies hard constraints."
+      status: "clear"
+    - id: "missing-approval"
+      text: "User does not approve the selected model."
+      status: "clear"
+    - id: "unsafe-action"
+      text: "Destructive action, credentials, paid service, or external access is required."
+      status: "clear"
 `, now.Format(time.RFC3339), escapedRequest)
 }
 
@@ -400,6 +446,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	files["progress.md"] = "# Progress\n\nStatus: pending\n\n- [ ] Complete discovery\n- [ ] Complete model\n- [ ] Get approval before implementation\n- [ ] Execute approved plan\n- [ ] Validate with evidence\n"
 	files["evidence.md"] = "# Evidence\n\nStatus: pending\n\nRecord validation commands, outputs, artifacts, and final constraint audit here.\n"
 	files["notes.md"] = "# Notes\n\n"
+	files["events.jsonl"] = ""
 	return files
 }
 
@@ -410,7 +457,7 @@ func requiredFiles(workspaceType string) []string {
 	case "model":
 		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md"}
 	default:
-		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md"}
+		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
 	}
 }
 

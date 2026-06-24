@@ -6,59 +6,50 @@ license: Apache-2.0
 
 # KKT
 
-Use this skill for normal coding work that benefits from stricter planning than default plan mode. Apply Karush-Kuhn-Tucker-inspired constrained modeling as a discipline, not as numeric optimization.
+Use this skill for ordinary coding work that needs stricter planning than default plan mode. Apply constrained optimization as a discipline: choose the best feasible implementation given what must stay true.
 
-Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and the internal `references/layers/` contracts only when the request needs method selection beyond the plan profile.
+Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and `references/layers/` only when the request needs method selection beyond the plan profile.
 
 ## Core Rule
 
-Intake before modeling. Model before editing. Show the final modeling result and get explicit user approval before implementation. Derive an execution contract before changing code. Finish only with validation evidence or an explicit blocker.
+Intake before modeling. Discovery before asking for repo facts. Model before editing. Show the final modeling result and get explicit user approval before implementation. Finish only with validation evidence or an explicit blocker.
+
+## CLI-First Workflow
+
+Use the `kkt` CLI whenever durable state is useful. The skill owns reasoning policy; the CLI owns state creation, reads, mutation, approval, evidence, validation, and completion.
+
+```text
+kkt start plan "<user request>"
+kkt status
+kkt next
+kkt model "<selected compact model>"
+kkt approve "<approved scope>"
+kkt evidence "<validation evidence>"
+kkt validate
+kkt done
+```
+
+If `kkt` is missing and durable state is needed, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state.
 
 ## Workflow
 
-1. Translate the user's rough input into an intent frame: user goal, desired behavior, user-visible success, scope boundary, priority signals, examples, and explicit user constraints.
-2. Before asking, apply the owner-decision filter: inspect discoverable facts locally, choose conservative reversible defaults when risk is low and record them as assumptions, and ask only for owner decisions that materially change product behavior, risk, scope, approval, or execution mode. Do not ask for files, routes, schemas, tests, config, constraints, or validation commands that can be discovered locally.
-3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues to discover repo facts, constraints, validation paths, and likely technical non-goals before forming the model.
-4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions. Ask only when a high-impact product choice, irreversible tradeoff, external dependency, destructive action, scope expansion, or infeasible ambiguity remains.
-5. Build a compact optimization model using the plan profile:
-   - request intake;
-   - objective;
-   - system state;
-   - decision variables and their domains;
-   - hard and soft constraint contract;
-   - feasible plans;
-   - selected plan;
-   - selected-plan binding audit;
-   - sensitivity analysis.
-6. Derive a compact execution contract:
-   - acceptance criteria;
-   - validation plan;
-   - evidence required;
-   - stop conditions.
-7. Eliminate infeasible plans before comparing feasible plans.
-8. Select the best feasible plan by lexicographic objective order:
-   1. satisfy the user request;
-   2. preserve correctness, security, data integrity, and public contracts;
-   3. minimize blast radius;
-   4. match existing architecture and conventions;
-   5. improve maintainability where cheap;
-   6. prefer validation clarity over elegance.
-9. Show the final modeling result and wait for explicit user approval before implementation.
-10. Execute the approved plan with focused edits.
-11. Validate against the optimization model and execution contract.
-12. End with a short constraint audit.
+1. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
+2. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
+3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model.
+4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
+5. Build a compact model: objective, system state, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
+6. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.
+7. Reject infeasible plans, then choose the best feasible plan by this order: user request, correctness/security/data/public contracts, blast radius, existing architecture, maintainability, validation clarity.
+8. Show the final modeling result and wait for approval before editing.
+9. Execute the approved plan with focused edits, then validate with evidence and finish with a constraint audit.
 
 ## Output Discipline
 
-For small tasks, keep the model brief. Do not create durable files unless the user asks, the task becomes long-running, or `$kkt-loop` is more appropriate.
+For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Switch to `$kkt-model` for deeper non-mutating modeling or `$kkt-loop` for long-running continuation.
 
-When durable state is useful for normal `$kkt` work, use the plan tier from `references/state-contract.md`: a single `.kkt/kkt.yaml` with compact layer summaries, decisions, artifact references, approval state, and validation evidence. Use `kkt start plan "<user request>"` to create that state and `kkt validate` before the final response. Do not create Markdown layer artifacts in the plan tier; switch to `$kkt-model` or `$kkt-loop` when discovery or modeling context needs rich capture.
+Before implementation, expose: objective, selected plan, rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 
-The intent, discovery, modeling, execution, and validation layers are internal contract boundaries, not user-facing skills. Run them inside this skill when needed; do not ask the user to invoke layer names directly.
-
-Before implementation, always expose a concise modeling result and ask for approval. Include the objective, selected plan, relevant rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
-
-Use this final shape:
+Final audit shape:
 
 ```text
 Objective: satisfied / not satisfied
@@ -68,26 +59,15 @@ Validation evidence: commands, checks, artifacts, or reason validation was not p
 Residual risk: concise notes
 ```
 
-## Re-Optimization
+## Stop Conditions
 
-If execution discovers a fact that invalidates the selected plan, pause implementation, update the model, choose the new best feasible plan, and continue only if no stop condition is hit.
-
-## Execution Stop Conditions
-
-Stop and ask the user before continuing when:
-
-- no feasible plan satisfies the hard constraints;
-- the user does not approve the final modeling result;
-- a destructive action is required;
-- credentials, secrets, external access, or paid services are required;
-- multiple feasible plans differ mainly by product intent;
-- continuing would expand scope beyond the user request.
+Stop and ask before continuing when no feasible plan satisfies hard constraints, approval is missing, destructive action is required, credentials/secrets/external access/paid services are required, feasible plans differ mainly by product intent, or continuing expands scope.
 
 ## Do Not
 
 - Do not use fake numeric scores for subjective qualities.
 - Do not treat the first plausible plan as selected before feasibility checks.
-- Do not edit files before the final modeling result is explicitly approved.
-- Do not follow existing project patterns silently when they appear wrong; flag the issue.
-- Do not make broad refactors unless the model shows they are necessary.
-- Do not finish without validation evidence or an explicit statement that validation could not be run.
+- Do not edit before the final modeling result is approved.
+- Do not silently follow existing patterns that appear wrong; flag them.
+- Do not make broad refactors unless required by the model.
+- Do not finish without validation evidence or an explicit validation limitation.

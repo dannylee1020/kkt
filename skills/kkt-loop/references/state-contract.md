@@ -23,12 +23,16 @@ kkt validate
 
 ## Canonical Rule
 
-`kkt.yaml` is the canonical state index. Markdown files carry rich context.
+The `kkt` CLI is the canonical workflow mutation interface. Skills should use CLI commands for workspace creation, state reads, layer/artifact recording, approval, task/progress/evidence updates, validation, and completion.
+
+`kkt.yaml` is the canonical current contract. Markdown files carry rich context. For loop workspaces, `events.jsonl` is the append-only event log.
 
 - Put statuses, active layer, method choices, decisions, artifact references, approvals, stop conditions, and summaries in YAML.
 - Put detailed discovery maps, modeling rationale, plans, evidence logs, and notes in Markdown.
+- Put chronological loop events such as task transitions, evidence additions, approvals, blockers, validation runs, and completion in `events.jsonl`.
 - Do not compress large discovery or modeling context into YAML if doing so would lose useful detail.
 - Do not rely on hidden session context for decisions that affect later layers.
+- Do not hand-edit `kkt.yaml` as the primary workflow operation when a CLI command exists.
 
 ## kkt.yaml Shape
 
@@ -84,11 +88,30 @@ artifact_refs:
   progress:
   evidence:
   notes:
+  events:
 approval:
   required: true
   status: not_required | pending | approved | rejected
   approved_scope:
 stop_conditions: []
+loop_state:
+  current_task: ""
+  tasks:
+    - id:
+      title:
+      status: pending | active | done | skipped | blocked
+  acceptance_criteria:
+    - id:
+      text:
+      status: pending | satisfied | blocked
+  evidence:
+    - id:
+      summary:
+      status: pending | recorded
+  stop_conditions:
+    - id:
+      text:
+      status: clear | active | resolved
 ```
 
 Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml` can keep layer summaries inline and leave Markdown artifacts empty or absent.
@@ -109,6 +132,7 @@ Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml
 - `discovery.md`: files, symbols, components, functions, workflows, discovered constraints, validation paths, coupling, evidence, confidence, and unknowns.
 - `model.md`: method selection, candidates, feasibility, selected plan, binding constraints, sensitivity, and execution implications.
 - `plan.md`: execution tasks, acceptance criteria, validation plan, evidence required, stop conditions, and continuation policy.
-- `progress.md`: current task, task list, work log, and blockers.
+- `progress.md`: work log, progress narrative, and blocker notes.
 - `evidence.md`: validation map, command outputs, artifacts, and final certificate.
 - `notes.md`: observations, assumptions, open questions, and deferred ideas.
+- `events.jsonl`: append-only loop event history for replay, audit, and continuation context.

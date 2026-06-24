@@ -101,13 +101,14 @@ Install KKT:
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-The installer auto-detects supported coding agents, installs KKT skills into their global skill directories, and installs the companion CLI. Use an explicit target or binary location when needed:
+The installer auto-detects supported coding agents, installs KKT skills into their global skill directories, and installs the companion CLI. Plain `install` is safe to rerun: it installs missing skills, keeps existing skills unchanged, and still installs or updates the CLI. Use `upgrade` when you want to replace installed KKT skills with the latest downloaded copy.
 
 ```bash
 scripts/install.sh --target codex
 scripts/install.sh --target claude
 scripts/install.sh --target all
 scripts/install.sh --bin-dir ~/.local/bin
+scripts/install.sh upgrade
 ```
 
 From a checkout:
@@ -135,7 +136,25 @@ Pi:          /skill:kkt
 OpenCode:    ask OpenCode to use the kkt skill
 ```
 
-Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL. If no matching binary is available, the installer falls back to building from source with Go.
+The skills are installed from the downloaded source archive. The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
+
+CLI workflow commands:
+
+```bash
+kkt start plan|model|loop "<request>"
+kkt status
+kkt next
+kkt show [artifact]
+kkt intent|discovery|model|plan|progress|evidence|notes
+kkt criteria add|satisfy|block
+kkt task add|start|done|skip|block
+kkt approve
+kkt block
+kkt validate
+kkt done
+```
+
+For loop workspaces, `kkt.yaml` is the current contract, `events.jsonl` is the append-only event log, and Markdown files hold rich context and evidence.
 
 
 ## Skills

@@ -133,8 +133,8 @@ resolve_root() {
   install_url="${KKT_INSTALL_URL:-$(default_archive_url)}"
   tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/kkt-cli-install.XXXXXX")"
   archive="$tmp_dir/kkt.tar.gz"
-  log "Downloading kkt source from $install_url"
   download_file "$install_url" "$archive"
+  log "source: downloaded $install_url"
   extract_archive "$archive" "$tmp_dir/src"
   printf '%s\n' "$tmp_dir/src"
 }
@@ -179,25 +179,25 @@ install_cli() {
   mkdir -p "$(dirname "$kkt_command")"
 
   if [ -n "$binary_url" ]; then
-    log "Downloading kkt CLI from $binary_url"
+    log "cli: downloading $binary_url"
     if try_download_file "$binary_url" "$kkt_command"; then
       chmod +x "$kkt_command"
-      log "Installed kkt CLI: $kkt_command"
+      log "cli: downloaded $kkt_command"
       return
     fi
     rm -f "$kkt_command"
-    log "Could not download prebuilt kkt CLI from $binary_url"
+    log "cli: prebuilt unavailable $binary_url"
   fi
 
   if command -v go >/dev/null 2>&1; then
     root="$(resolve_root)"
-    log "Building kkt CLI to $kkt_command"
+    log "cli: building $kkt_command"
     (cd "$root" && go build -ldflags="-X github.com/dannylee1020/kkt/internal/workflow.Version=${KKT_VERSION:-dev}" -o "$kkt_command" ./cmd/kkt)
   else
     fail "Could not install kkt CLI: prebuilt binary unavailable and Go is not installed."
   fi
 
-  log "Installed kkt CLI: $kkt_command"
+  log "cli: built $kkt_command"
 }
 
 main() {

@@ -17,11 +17,19 @@ Usage:
   kkt start plan|model|loop <request>
   kkt status [path]
   kkt next [path]
+  kkt show [artifact]
+  kkt intent|discovery|model|plan|progress|evidence|notes [content]
+  kkt approve [scope]
+  kkt criteria [add|satisfy|block] [criterion]
+  kkt task [add|start|done|skip|block] [task]
+  kkt block [reason]
   kkt validate [path]
+  kkt done [summary]
+  kkt resume [path]
   kkt uninstall [codex|claude|opencode|pi|all]
 
 KKT skills own the workflow. This CLI handles deterministic .kkt state
-scaffolding, status, next-step hints, validation, and legacy cleanup.
+scaffolding, workflow state, artifacts, evidence, validation, and cleanup.
 `
 
 func Run(args []string, stdout, stderr io.Writer) error {
@@ -41,8 +49,24 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runStatus(args[1:], stdout)
 	case "next":
 		return runNext(args[1:], stdout)
+	case "show":
+		return runShow(args[1:], stdout)
+	case "intent", "discovery", "model", "plan", "progress", "evidence", "notes":
+		return runArtifact(args[0], args[1:], stdout)
+	case "approve":
+		return runApprove(args[1:], stdout)
+	case "criteria":
+		return runCriteria(args[1:], stdout)
+	case "task":
+		return runTask(args[1:], stdout)
+	case "block":
+		return runBlock(args[1:], stdout)
 	case "validate":
 		return runValidate(args[1:], stdout)
+	case "done":
+		return runDone(args[1:], stdout)
+	case "resume":
+		return runResume(args[1:], stdout)
 	case "uninstall":
 		return runUninstall(args[1:], stdout)
 	default:
@@ -134,6 +158,9 @@ func runStatus(args []string, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "active_layer: %s\n", state.ActiveLayer)
 	fmt.Fprintf(stdout, "profile: %s\n", state.Profile)
 	fmt.Fprintf(stdout, "approval: %s\n", state.ApprovalStatus)
+	if loop, loopErr := readLoopState(workspace); loopErr == nil && loop.CurrentTask != "" {
+		fmt.Fprintf(stdout, "current_task: %s\n", loop.CurrentTask)
+	}
 	return nil
 }
 
@@ -146,7 +173,7 @@ func runNext(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, NextInstruction(state))
+	fmt.Fprintln(stdout, nextInstructionForWorkspace(workspace, state))
 	return nil
 }
 
@@ -189,10 +216,10 @@ func firstArg(args []string) string {
 func startInstruction(profile string) string {
 	switch profile {
 	case "plan":
-		return "inspect relevant code/docs, keep compact state in .kkt/kkt.yaml, then request approval before edits"
+		return "inspect relevant code/docs, record the selected model with kkt model, then request approval before edits"
 	case "model":
-		return "inspect relevant code/docs, complete discovery.md, then update model.md with the selected model"
+		return "inspect relevant code/docs, record discovery with kkt discovery, then record the selected model with kkt model"
 	default:
-		return "inspect relevant code/docs, complete discovery.md, then update model.md before requesting approval"
+		return "inspect relevant code/docs, record discovery/model/plan with kkt commands, then request approval before execution"
 	}
 }
