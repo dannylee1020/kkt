@@ -5,7 +5,10 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="license: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-16a34a.svg"></a>
+  <a href="https://github.com/dannylee1020/kkt/actions/workflows/release-binaries.yml"><img alt="ci status" src="https://img.shields.io/github/actions/workflow/status/dannylee1020/kkt/release-binaries.yml?label=ci"></a>
+  <a href="https://github.com/dannylee1020/kkt/actions/workflows/codeql.yml"><img alt="security status" src="https://img.shields.io/github/actions/workflow/status/dannylee1020/kkt/codeql.yml?label=security"></a>
+  <a href="https://github.com/dannylee1020/kkt/releases/latest"><img alt="release version" src="https://img.shields.io/github/v/release/dannylee1020/kkt?sort=semver&display_name=tag"></a>
+  <a href="LICENSE"><img alt="license: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-2563eb.svg"></a>
 </p>
 
 <hr style="width: 100%; border: 0; border-top: 2px solid #e5e7eb;">
