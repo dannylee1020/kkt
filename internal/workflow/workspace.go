@@ -223,6 +223,10 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 		result.Issues = append(result.Issues, "evidence.md is still pending")
 	}
 	if state.WorkspaceType == "loop" {
+		if state.ApprovalStatus != "approved" {
+			result.OK = false
+			result.Issues = append(result.Issues, "approval is not approved")
+		}
 		loop, loopErr := readLoopState(workspace)
 		if loopErr != nil {
 			result.OK = false
@@ -249,6 +253,10 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 			if len(loop.Evidence) == 0 {
 				result.OK = false
 				result.Issues = append(result.Issues, "no loop evidence recorded")
+			}
+			for _, issue := range evidenceMappingIssues(loop) {
+				result.OK = false
+				result.Issues = append(result.Issues, issue)
 			}
 		}
 	}

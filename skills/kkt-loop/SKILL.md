@@ -31,11 +31,13 @@ kkt task add "<task>"
 kkt approve "<approved scope>"
 kkt task start <task-id>
 kkt progress "<progress update>"
-kkt evidence "<validation evidence>"
+kkt evidence --for <criterion-id> --command "<validation command>" "<validation evidence>"
 kkt task done <task-id>
 kkt criteria satisfy <criterion-id>
 kkt validate
 kkt done
+kkt resume
+kkt replay --check
 ```
 
 If `kkt` is missing, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state.
@@ -48,7 +50,7 @@ Loop workspaces use:
 
 - `kkt.yaml` as the current contract.
 - Markdown artifacts for rich intent, discovery, model, plan, progress, evidence, and notes.
-- `events.jsonl` as append-only history for task transitions, evidence, approval, blockers, validation, and completion.
+- `events.jsonl` as append-only history for task transitions, evidence, approval, blockers, validation, and completion. Use it for resume context and replay consistency checks, not as a replacement source of truth for `kkt.yaml`.
 
 ## Workflow
 
@@ -60,8 +62,8 @@ Loop workspaces use:
 6. Show the final model and wait for explicit approval.
 7. After approval, create durable state with `kkt start loop`, record intent/discovery/model/plan with CLI commands, add criteria/tasks, and record approval.
 8. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-9. Before each work segment, run `kkt status` and `kkt next`; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
-10. Execute only the current or CLI-reported next task, update progress/evidence, update task and criteria state, and run `kkt validate`.
+9. Before each work segment, run `kkt status` and `kkt next`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
+10. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
 11. Re-optimize with `kkt model` only when new evidence changes feasibility, constraints, or objective fit.
 
 ## Goal Objective Template

@@ -16,9 +16,10 @@ Usage:
   kkt --version
   kkt start plan|model|loop <request>
   kkt status [path]
-  kkt next [path]
+  kkt next [--json] [path]
   kkt show [artifact]
-  kkt intent|discovery|model|plan|progress|evidence|notes [content]
+  kkt intent|discovery|model|plan|progress|evidence [--for criterion] [--command command] [content]
+  kkt notes [content]
   kkt approve [scope]
   kkt criteria [add|satisfy|block] [criterion]
   kkt task [add|start|done|skip|block] [task]
@@ -26,6 +27,7 @@ Usage:
   kkt validate [path]
   kkt done [summary]
   kkt resume [path]
+  kkt replay --check [path]
   kkt uninstall [codex|claude|opencode|pi|all]
 
 KKT skills own the workflow. This CLI handles deterministic .kkt state
@@ -67,6 +69,8 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runDone(args[1:], stdout)
 	case "resume":
 		return runResume(args[1:], stdout)
+	case "replay":
+		return runReplay(args[1:], stdout)
 	case "uninstall":
 		return runUninstall(args[1:], stdout)
 	default:
@@ -165,7 +169,11 @@ func runStatus(args []string, stdout io.Writer) error {
 }
 
 func runNext(args []string, stdout io.Writer) error {
-	workspace, err := ResolveWorkspace(".", firstArg(args))
+	jsonOutput, path, err := parseJSONPathArgs("next", args)
+	if err != nil {
+		return err
+	}
+	workspace, err := ResolveWorkspace(".", path)
 	if err != nil {
 		return err
 	}
@@ -173,7 +181,11 @@ func runNext(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, nextInstructionForWorkspace(workspace, state))
+	action := nextActionForWorkspace(workspace, state)
+	if jsonOutput {
+		return writeJSON(stdout, action)
+	}
+	fmt.Fprintln(stdout, action.Instruction)
 	return nil
 }
 
@@ -187,8 +199,14 @@ func runValidate(args []string, stdout io.Writer) error {
 		return err
 	}
 	if result.OK {
+		if err := appendValidationEvent(workspace, result); err != nil {
+			return err
+		}
 		fmt.Fprintf(stdout, "valid: %s\n", workspace)
 		return nil
+	}
+	if err := appendValidationEvent(workspace, result); err != nil {
+		return err
 	}
 	fmt.Fprintf(stdout, "invalid: %s\n", workspace)
 	for _, issue := range result.Issues {
@@ -204,6 +222,25 @@ func rejectFlags(command string, args []string) error {
 		}
 	}
 	return nil
+}
+
+func parseJSONPathArgs(command string, args []string) (bool, string, error) {
+	jsonOutput := false
+	path := ""
+	for _, arg := range args {
+		if arg == "--json" {
+			jsonOutput = true
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			return false, "", fmt.Errorf("%s does not accept flag: %s", command, arg)
+		}
+		if path != "" {
+			return false, "", fmt.Errorf("%s accepts at most one path", command)
+		}
+		path = arg
+	}
+	return jsonOutput, path, nil
 }
 
 func firstArg(args []string) string {

@@ -143,18 +143,21 @@ CLI workflow commands:
 ```bash
 kkt start plan|model|loop "<request>"
 kkt status
-kkt next
+kkt next [--json]
 kkt show [artifact]
 kkt intent|discovery|model|plan|progress|evidence|notes
+kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
 kkt criteria add|satisfy|block
 kkt task add|start|done|skip|block
 kkt approve
 kkt block
 kkt validate
 kkt done
+kkt resume
+kkt replay --check
 ```
 
-For loop workspaces, `kkt.yaml` is the current contract, `events.jsonl` is the append-only event log, and Markdown files hold rich context and evidence.
+For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and Markdown files hold rich context and evidence. `kkt replay --check` reports drift between the event history and current state without mutating either file.
 
 
 ## Skills

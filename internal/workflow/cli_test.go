@@ -132,11 +132,12 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "upgrade", "kkt", "loop"},
+		{"approve", "Approved test loop"},
 		{"task", "add", "Inspect code"},
 		{"task", "start", "inspect-code"},
 		{"progress", "Started inspection"},
-		{"evidence", "go test ./... passed"},
 		{"criteria", "add", "Evidence recorded"},
+		{"evidence", "--for", "evidence-recorded", "--command", "go test ./...", "go test ./... passed"},
 		{"criteria", "satisfy", "evidence-recorded"},
 		{"task", "done", "inspect-code"},
 		{"validate"},
@@ -167,5 +168,200 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 	}
 	if text := string(events); !strings.Contains(text, "task_added") || !strings.Contains(text, "done") {
 		t.Fatalf("events log missing lifecycle entries:\n%s", text)
+	}
+}
+
+func TestRunNextForFreshLoopUsesActiveLayer(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run([]string{"start", "loop", "bootstrap", "guidance"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+
+	var textNext bytes.Buffer
+	if err := Run([]string{"next"}, &textNext, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := textNext.String(); !strings.Contains(text, "record discovery") || strings.Contains(text, "validate, then kkt done") {
+		t.Fatalf("fresh loop next should use active layer guidance:\n%s", text)
+	}
+
+	var jsonNext bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &jsonNext, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := jsonNext.String(); !strings.Contains(text, `"action": "continue_layer"`) || !strings.Contains(text, `"reason": "active layer is discovery"`) {
+		t.Fatalf("fresh loop next --json should continue the active layer:\n%s", text)
+	}
+}
+
+func TestRunNextRequiresApprovalBeforeLoopTaskExecution(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "approval", "gate"},
+		{"task", "add", "Inspect code"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	text := next.String()
+	if !strings.Contains(text, `"action": "request_approval"`) || !strings.Contains(text, `"blocked": true`) {
+		t.Fatalf("unapproved loop with work should request approval:\n%s", text)
+	}
+	if strings.Contains(text, `"action": "start_task"`) || strings.Contains(text, `"task_id": "inspect-code"`) {
+		t.Fatalf("unapproved loop should not suggest task execution:\n%s", text)
+	}
+}
+
+func TestRunNextJSONAndReplayCheck(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "add", "replay", "check"},
+		{"approve", "Approved replay check"},
+		{"task", "add", "Inspect code"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := next.String(); !strings.Contains(text, `"action": "start_task"`) || !strings.Contains(text, `"task_id": "inspect-code"`) {
+		t.Fatalf("next --json output did not include structured task action:\n%s", text)
+	}
+
+	if err := Run([]string{"replay", "--check"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("replay --check should pass for consistent event/state history: %v", err)
+	}
+}
+
+func TestRunResumeIncludesContinuationPacket(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "resume", "context"},
+		{"approve", "Approved resume check"},
+		{"task", "add", "Inspect code"},
+		{"task", "start", "inspect-code"},
+		{"criteria", "add", "Evidence recorded"},
+		{"evidence", "--for", "evidence-recorded", "Inspection evidence recorded"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var resume bytes.Buffer
+	if err := Run([]string{"resume"}, &resume, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	text := resume.String()
+	for _, want := range []string{"approval: approved", "current_task: inspect-code", "unsatisfied_criteria:", "latest_evidence:", "recent_events:", "validation: invalid"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("resume output missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "prove", "terminal", "validation"},
+		{"task", "add", "Inspect code"},
+		{"task", "start", "inspect-code"},
+		{"criteria", "add", "Evidence recorded"},
+		{"evidence", "Unmapped evidence"},
+		{"criteria", "satisfy", "evidence-recorded"},
+		{"task", "done", "inspect-code"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var stdout bytes.Buffer
+	err = Run([]string{"done"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("done should fail without approval and mapped evidence")
+	}
+	text := stdout.String()
+	if !strings.Contains(text, "approval is not approved") || !strings.Contains(text, "criterion evidence-recorded is satisfied without mapped evidence") {
+		t.Fatalf("done output missing terminal invariant failures:\n%s", text)
 	}
 }

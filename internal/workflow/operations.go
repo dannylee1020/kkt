@@ -26,9 +26,11 @@ type LoopCriterion struct {
 }
 
 type LoopEvidence struct {
-	ID      string
-	Summary string
-	Status  string
+	ID       string
+	Summary  string
+	Status   string
+	Criteria []string
+	Command  string
 }
 
 type LoopStopCondition struct {
@@ -43,6 +45,35 @@ type LoopState struct {
 	AcceptanceCriteria []LoopCriterion
 	Evidence           []LoopEvidence
 	StopConditions     []LoopStopCondition
+}
+
+type NextAction struct {
+	SchemaVersion    int      `json:"schema_version"`
+	Action           string   `json:"action"`
+	Reason           string   `json:"reason"`
+	TaskID           string   `json:"task_id,omitempty"`
+	CriterionID      string   `json:"criterion_id,omitempty"`
+	StopCondition    string   `json:"stop_condition,omitempty"`
+	Blocked          bool     `json:"blocked"`
+	Requires         []string `json:"requires,omitempty"`
+	EvidenceRequired []string `json:"evidence_required,omitempty"`
+	Instruction      string   `json:"instruction"`
+}
+
+type EventEntry struct {
+	SchemaVersion   int            `json:"schema_version"`
+	Time            string         `json:"time"`
+	Type            string         `json:"type"`
+	WorkspaceStatus string         `json:"workspace_status,omitempty"`
+	ActiveLayer     string         `json:"active_layer,omitempty"`
+	Actor           string         `json:"actor"`
+	Data            map[string]any `json:"data,omitempty"`
+}
+
+type EvidenceOptions struct {
+	Criteria []string
+	Command  string
+	Content  string
 }
 
 func runShow(args []string, stdout io.Writer) error {
@@ -85,7 +116,17 @@ func runArtifact(artifact string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	content, err := commandContent(args)
+	contentArgs := args
+	evidenceOptions := EvidenceOptions{}
+	if artifact == "evidence" {
+		var parseErr error
+		evidenceOptions, parseErr = parseEvidenceArgs(args)
+		if parseErr != nil {
+			return parseErr
+		}
+		contentArgs = []string{evidenceOptions.Content}
+	}
+	content, err := commandContent(contentArgs)
 	if err != nil {
 		return err
 	}
@@ -110,7 +151,10 @@ func runArtifact(artifact string, args []string, stdout io.Writer) error {
 	if err := markArtifactRecorded(path, artifact); err != nil {
 		return err
 	}
-	if err := updateStateForArtifact(workspace, artifact, content); err != nil {
+	if artifact == "evidence" {
+		evidenceOptions.Content = content
+	}
+	if err := updateStateForArtifact(workspace, artifact, content, evidenceOptions); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
@@ -130,7 +174,7 @@ func runPlanArtifact(workspace, artifact, content string, stdout io.Writer) erro
 	if err := appendPlanStateEntry(workspace, artifact, content); err != nil {
 		return err
 	}
-	if err := updateStateForArtifact(workspace, artifact, content); err != nil {
+	if err := updateStateForArtifact(workspace, artifact, content, EvidenceOptions{}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
@@ -152,7 +196,7 @@ func runApprove(args []string, stdout io.Writer) error {
 	if err := updateTopLevelState(workspace, "status", "approved"); err != nil {
 		return err
 	}
-	if err := appendEvent(workspace, "approval_granted", map[string]string{"scope": scope}); err != nil {
+	if err := appendEvent(workspace, "approval_granted", map[string]any{"scope": scope}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "approved: %s\n", scope)
@@ -186,7 +230,7 @@ func runBlock(args []string, stdout io.Writer) error {
 			return writeErr
 		}
 	}
-	if err := appendEvent(workspace, "blocked", map[string]string{"reason": reason}); err != nil {
+	if err := appendEvent(workspace, "blocked", map[string]any{"reason": reason}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "blocked: %s\n", reason)
@@ -208,8 +252,27 @@ func runResume(args []string, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "workspace: %s\n", workspace)
 	fmt.Fprintf(stdout, "status: %s\n", state.Status)
 	fmt.Fprintf(stdout, "active_layer: %s\n", state.ActiveLayer)
-	if loop, loopErr := readLoopState(workspace); loopErr == nil && loop.CurrentTask != "" {
-		fmt.Fprintf(stdout, "current_task: %s\n", loop.CurrentTask)
+	fmt.Fprintf(stdout, "approval: %s\n", state.ApprovalStatus)
+	if loop, loopErr := readLoopState(workspace); loopErr == nil {
+		printResumeLoop(stdout, loop)
+	}
+	result, validationErr := ValidateWorkspace(workspace)
+	if validationErr == nil {
+		if result.OK {
+			fmt.Fprintln(stdout, "validation: valid")
+		} else {
+			fmt.Fprintln(stdout, "validation: invalid")
+			for _, issue := range result.Issues {
+				fmt.Fprintf(stdout, "- %s\n", issue)
+			}
+		}
+	}
+	events, eventsErr := readEvents(workspace, 5)
+	if eventsErr == nil && len(events) > 0 {
+		fmt.Fprintln(stdout, "recent_events:")
+		for _, event := range events {
+			fmt.Fprintf(stdout, "- %s %s %s\n", event.Time, event.Type, eventDataSummary(event.Data))
+		}
 	}
 	fmt.Fprintln(stdout, nextInstructionForWorkspace(workspace, state))
 	return nil
@@ -240,7 +303,7 @@ func runDone(args []string, stdout io.Writer) error {
 	if err := updateTopLevelState(workspace, "active_layer", "validation"); err != nil {
 		return err
 	}
-	if err := appendEvent(workspace, "done", map[string]string{"summary": summary}); err != nil {
+	if err := appendEvent(workspace, "done", map[string]any{"summary": summary}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "complete: %s\n", workspace)
@@ -271,7 +334,7 @@ func runTask(args []string, stdout io.Writer) error {
 		if err := writeLoopState(workspace, loop); err != nil {
 			return err
 		}
-		if err := appendEvent(workspace, "task_added", map[string]string{"task": task.ID, "title": title}); err != nil {
+		if err := appendEvent(workspace, "task_added", map[string]any{"task": task.ID, "title": title}); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "task added: %s\n", task.ID)
@@ -307,7 +370,7 @@ func runTask(args []string, stdout io.Writer) error {
 		if err := writeLoopState(workspace, loop); err != nil {
 			return err
 		}
-		if err := appendEvent(workspace, "task_"+action, map[string]string{"task": id}); err != nil {
+		if err := appendEvent(workspace, "task_"+action, map[string]any{"task": id}); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "task %s: %s\n", action, id)
@@ -348,7 +411,7 @@ func runCriteria(args []string, stdout io.Writer) error {
 		if err := writeLoopState(workspace, loop); err != nil {
 			return err
 		}
-		if err := appendEvent(workspace, "criterion_added", map[string]string{"criterion": criterion.ID, "text": text}); err != nil {
+		if err := appendEvent(workspace, "criterion_added", map[string]any{"criterion": criterion.ID, "text": text}); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "criterion added: %s\n", criterion.ID)
@@ -373,7 +436,7 @@ func runCriteria(args []string, stdout io.Writer) error {
 		if err := writeLoopState(workspace, loop); err != nil {
 			return err
 		}
-		if err := appendEvent(workspace, "criterion_"+action, map[string]string{"criterion": id}); err != nil {
+		if err := appendEvent(workspace, "criterion_"+action, map[string]any{"criterion": id}); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "criterion %s: %s\n", action, id)
@@ -404,6 +467,36 @@ func commandContent(args []string) (string, error) {
 		return strings.TrimRight(builder.String(), "\n"), nil
 	}
 	return strings.Join(args, " "), nil
+}
+
+func parseEvidenceArgs(args []string) (EvidenceOptions, error) {
+	options := EvidenceOptions{}
+	content := []string{}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--for":
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return EvidenceOptions{}, errors.New("evidence --for requires a criterion id")
+			}
+			options.Criteria = append(options.Criteria, splitCSV(args[i])...)
+		case "--command":
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return EvidenceOptions{}, errors.New("evidence --command requires a command")
+			}
+			options.Command = strings.TrimSpace(args[i])
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return EvidenceOptions{}, fmt.Errorf("evidence does not accept flag: %s", arg)
+			}
+			content = append(content, arg)
+		}
+	}
+	options.Criteria = uniqueStrings(options.Criteria)
+	options.Content = strings.TrimSpace(strings.Join(content, " "))
+	return options, nil
 }
 
 func artifactPath(workspace, artifact string) (string, error) {
@@ -462,7 +555,7 @@ func markArtifactRecorded(path, artifact string) error {
 	return os.WriteFile(path, []byte(next), 0o644)
 }
 
-func updateStateForArtifact(workspace, artifact, content string) error {
+func updateStateForArtifact(workspace, artifact, content string, evidenceOptions EvidenceOptions) error {
 	layerForArtifact := map[string]string{
 		"intent":    "intent",
 		"discovery": "discovery",
@@ -483,16 +576,27 @@ func updateStateForArtifact(workspace, artifact, content string) error {
 				summary = "Evidence recorded."
 			}
 			loop.Evidence = append(loop.Evidence, LoopEvidence{
-				ID:      uniqueID("evidence"),
-				Summary: summary,
-				Status:  "recorded",
+				ID:       uniqueID("evidence"),
+				Summary:  summary,
+				Status:   "recorded",
+				Criteria: evidenceOptions.Criteria,
+				Command:  evidenceOptions.Command,
 			})
 			if writeErr := writeLoopState(workspace, loop); writeErr != nil {
 				return writeErr
 			}
 		}
 	}
-	return appendEvent(workspace, artifact+"_recorded", map[string]string{"summary": firstLine(content)})
+	data := map[string]any{"summary": firstLine(content)}
+	if artifact == "evidence" {
+		if len(evidenceOptions.Criteria) > 0 {
+			data["criteria"] = evidenceOptions.Criteria
+		}
+		if evidenceOptions.Command != "" {
+			data["command"] = evidenceOptions.Command
+		}
+	}
+	return appendEvent(workspace, artifact+"_recorded", data)
 }
 
 func updateTopLevelState(workspace, key, value string) error {
@@ -610,7 +714,7 @@ func appendPlanStateEntry(workspace, artifact, content string) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
-func appendEvent(workspace, eventType string, values map[string]string) error {
+func appendEvent(workspace, eventType string, data map[string]any) error {
 	state, err := ReadState(workspace)
 	if err != nil {
 		return err
@@ -618,12 +722,14 @@ func appendEvent(workspace, eventType string, values map[string]string) error {
 	if state.WorkspaceType != "loop" {
 		return nil
 	}
-	entry := map[string]string{
-		"time": time.Now().UTC().Format(time.RFC3339),
-		"type": eventType,
-	}
-	for key, value := range values {
-		entry[key] = value
+	entry := EventEntry{
+		SchemaVersion:   1,
+		Time:            time.Now().UTC().Format(time.RFC3339),
+		Type:            eventType,
+		WorkspaceStatus: state.Status,
+		ActiveLayer:     state.ActiveLayer,
+		Actor:           "cli",
+		Data:            data,
 	}
 	payload, err := json.Marshal(entry)
 	if err != nil {
@@ -639,6 +745,86 @@ func appendEvent(workspace, eventType string, values map[string]string) error {
 	}
 	_, err = file.WriteString("\n")
 	return err
+}
+
+func appendValidationEvent(workspace string, result ValidationResult) error {
+	eventType := "validation_passed"
+	data := map[string]any{"ok": result.OK}
+	if !result.OK {
+		eventType = "validation_failed"
+		data["issues"] = result.Issues
+	}
+	return appendEvent(workspace, eventType, data)
+}
+
+func readEvents(workspace string, limit int) ([]EventEntry, error) {
+	file, err := os.Open(filepath.Join(workspace, "events.jsonl"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+	var events []EventEntry
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		event, parseErr := parseEventLine(line)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		events = append(events, event)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		return events[len(events)-limit:], nil
+	}
+	return events, nil
+}
+
+func parseEventLine(line string) (EventEntry, error) {
+	raw := map[string]any{}
+	if err := json.Unmarshal([]byte(line), &raw); err != nil {
+		return EventEntry{}, err
+	}
+	event := EventEntry{SchemaVersion: 1, Actor: "cli", Data: map[string]any{}}
+	if value, ok := raw["schema_version"].(float64); ok {
+		event.SchemaVersion = int(value)
+	}
+	if value, ok := raw["time"].(string); ok {
+		event.Time = value
+	}
+	if value, ok := raw["type"].(string); ok {
+		event.Type = value
+	}
+	if value, ok := raw["workspace_status"].(string); ok {
+		event.WorkspaceStatus = value
+	}
+	if value, ok := raw["active_layer"].(string); ok {
+		event.ActiveLayer = value
+	}
+	if value, ok := raw["actor"].(string); ok {
+		event.Actor = value
+	}
+	if data, ok := raw["data"].(map[string]any); ok {
+		event.Data = data
+	} else {
+		for key, value := range raw {
+			switch key {
+			case "schema_version", "time", "type", "workspace_status", "active_layer", "actor":
+				continue
+			default:
+				event.Data[key] = value
+			}
+		}
+	}
+	return event, nil
 }
 
 func readLoopState(workspace string) (LoopState, error) {
@@ -765,6 +951,12 @@ func readLoopState(workspace string) (LoopState, error) {
 			if key == "status" {
 				evidence.Status = value
 			}
+			if key == "criteria" {
+				evidence.Criteria = splitCSV(value)
+			}
+			if key == "command" {
+				evidence.Command = value
+			}
 		case "stop_conditions":
 			if stop == nil {
 				continue
@@ -840,6 +1032,12 @@ func renderLoopState(loop LoopState) string {
 			"      summary: "+quoteYAML(evidence.Summary),
 			"      status: "+quoteYAML(evidence.Status),
 		)
+		if len(evidence.Criteria) > 0 {
+			lines = append(lines, "      criteria: "+quoteYAML(strings.Join(evidence.Criteria, ",")))
+		}
+		if evidence.Command != "" {
+			lines = append(lines, "      command: "+quoteYAML(evidence.Command))
+		}
 	}
 	lines = append(lines, "  stop_conditions:")
 	for _, stop := range loop.StopConditions {
@@ -886,42 +1084,138 @@ func printTasks(stdout io.Writer, loop LoopState) error {
 	return nil
 }
 
+func printResumeLoop(stdout io.Writer, loop LoopState) {
+	if loop.CurrentTask != "" {
+		fmt.Fprintf(stdout, "current_task: %s\n", loop.CurrentTask)
+	}
+	printTaskGroup(stdout, "pending_tasks", loop.Tasks, "pending")
+	printTaskGroup(stdout, "blocked_tasks", loop.Tasks, "blocked")
+	printCriterionGroup(stdout, "unsatisfied_criteria", loop.AcceptanceCriteria, "pending")
+	printCriterionGroup(stdout, "blocked_criteria", loop.AcceptanceCriteria, "blocked")
+	if len(loop.Evidence) > 0 {
+		fmt.Fprintln(stdout, "latest_evidence:")
+		start := len(loop.Evidence) - 3
+		if start < 0 {
+			start = 0
+		}
+		for _, evidence := range loop.Evidence[start:] {
+			fmt.Fprintf(stdout, "- %s [%s] %s", evidence.ID, evidence.Status, evidence.Summary)
+			if len(evidence.Criteria) > 0 {
+				fmt.Fprintf(stdout, " (criteria: %s)", strings.Join(evidence.Criteria, ","))
+			}
+			if evidence.Command != "" {
+				fmt.Fprintf(stdout, " (command: %s)", evidence.Command)
+			}
+			fmt.Fprintln(stdout)
+		}
+	}
+}
+
+func printTaskGroup(stdout io.Writer, title string, tasks []LoopTask, status string) {
+	var matches []LoopTask
+	for _, task := range tasks {
+		if task.Status == status {
+			matches = append(matches, task)
+		}
+	}
+	if len(matches) == 0 {
+		return
+	}
+	fmt.Fprintf(stdout, "%s:\n", title)
+	for _, task := range matches {
+		fmt.Fprintf(stdout, "- %s %s\n", task.ID, task.Title)
+	}
+}
+
+func printCriterionGroup(stdout io.Writer, title string, criteria []LoopCriterion, status string) {
+	var matches []LoopCriterion
+	for _, criterion := range criteria {
+		if criterion.Status == status {
+			matches = append(matches, criterion)
+		}
+	}
+	if len(matches) == 0 {
+		return
+	}
+	fmt.Fprintf(stdout, "%s:\n", title)
+	for _, criterion := range matches {
+		fmt.Fprintf(stdout, "- %s %s\n", criterion.ID, criterion.Text)
+	}
+}
+
 func nextInstructionForWorkspace(workspace string, state State) string {
+	return nextActionForWorkspace(workspace, state).Instruction
+}
+
+func continueLayerAction(state State) NextAction {
+	instruction := NextInstruction(state)
+	return NextAction{
+		SchemaVersion: 1,
+		Action:        "continue_layer",
+		Reason:        "active layer is " + state.ActiveLayer,
+		Blocked:       false,
+		Instruction:   instruction,
+	}
+}
+
+func nextActionForWorkspace(workspace string, state State) NextAction {
 	if state.WorkspaceType != "loop" {
-		return NextInstruction(state)
+		return continueLayerAction(state)
 	}
 	loop, err := readLoopState(workspace)
 	if err != nil {
-		return NextInstruction(state)
+		instruction := NextInstruction(state)
+		return NextAction{
+			SchemaVersion: 1,
+			Action:        "inspect_state",
+			Reason:        "loop state could not be read",
+			Blocked:       false,
+			Instruction:   instruction,
+		}
 	}
 	for _, stop := range loop.StopConditions {
 		if stop.Status == "active" {
-			return "next: resolve active stop condition: " + stop.Text
+			instruction := "next: resolve active stop condition: " + stop.Text
+			return NextAction{SchemaVersion: 1, Action: "resolve_stop_condition", Reason: "stop condition is active", StopCondition: stop.Text, Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: instruction}
 		}
 	}
+	if loop.CurrentTask == "" && len(loop.Tasks) == 0 && len(loop.AcceptanceCriteria) == 0 {
+		return continueLayerAction(state)
+	}
+	if state.ApprovalStatus != "approved" {
+		instruction := "next: show the selected model and record approval with kkt approve before execution"
+		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
+	}
 	if loop.CurrentTask != "" {
-		return "next: complete current task " + loop.CurrentTask + ", record progress and evidence, then run kkt validate"
+		instruction := "next: complete current task " + loop.CurrentTask + ", record progress and evidence, then run kkt validate"
+		return NextAction{SchemaVersion: 1, Action: "complete_current_task", Reason: "current task is active", TaskID: loop.CurrentTask, Blocked: false, Requires: []string{"kkt progress", "kkt evidence", "kkt validate"}, Instruction: instruction}
 	}
 	for _, task := range loop.Tasks {
 		if task.Status == "pending" {
-			return "next: run kkt task start " + task.ID
+			instruction := "next: run kkt task start " + task.ID
+			return NextAction{SchemaVersion: 1, Action: "start_task", Reason: "first pending task", TaskID: task.ID, Blocked: false, Requires: []string{"kkt task start " + task.ID}, Instruction: instruction}
 		}
 		if task.Status == "active" {
-			return "next: complete active task " + task.ID + ", record progress and evidence, then run kkt validate"
+			instruction := "next: complete active task " + task.ID + ", record progress and evidence, then run kkt validate"
+			return NextAction{SchemaVersion: 1, Action: "complete_task", Reason: "task is active", TaskID: task.ID, Blocked: false, Requires: []string{"kkt progress", "kkt evidence", "kkt validate"}, Instruction: instruction}
 		}
 		if task.Status == "blocked" {
-			return "next: resolve blocked task " + task.ID
+			instruction := "next: resolve blocked task " + task.ID
+			return NextAction{SchemaVersion: 1, Action: "resolve_blocked_task", Reason: "task is blocked", TaskID: task.ID, Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: instruction}
 		}
 	}
 	for _, criterion := range loop.AcceptanceCriteria {
 		if criterion.Status == "pending" {
-			return "next: satisfy acceptance criterion " + criterion.ID + " with evidence, then run kkt criteria satisfy " + criterion.ID
+			instruction := "next: satisfy acceptance criterion " + criterion.ID + " with evidence, then run kkt criteria satisfy " + criterion.ID
+			return NextAction{SchemaVersion: 1, Action: "satisfy_criterion", Reason: "acceptance criterion is pending", CriterionID: criterion.ID, Blocked: false, Requires: []string{"kkt evidence --for " + criterion.ID, "kkt criteria satisfy " + criterion.ID}, EvidenceRequired: []string{criterion.ID}, Instruction: instruction}
 		}
 		if criterion.Status == "blocked" {
-			return "next: resolve blocked acceptance criterion " + criterion.ID
+			instruction := "next: resolve blocked acceptance criterion " + criterion.ID
+			return NextAction{SchemaVersion: 1, Action: "resolve_blocked_criterion", Reason: "acceptance criterion is blocked", CriterionID: criterion.ID, Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: instruction}
 		}
 	}
-	return "next: run kkt validate, then kkt done when acceptance criteria and evidence are complete"
+	instruction := "next: run kkt validate, then kkt done when acceptance criteria and evidence are complete"
+	return NextAction{SchemaVersion: 1, Action: "validate_then_done", Reason: "no open tasks or criteria remain", Blocked: false, Requires: []string{"kkt validate", "kkt done"}, Instruction: instruction}
 }
 
 func uniqueTaskID(loop LoopState, base string) string {
@@ -970,6 +1264,195 @@ func taskIDExists(loop LoopState, id string) bool {
 
 func uniqueID(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, time.Now().UTC().Format("20060102-150405"))
+}
+
+func runReplay(args []string, stdout io.Writer) error {
+	if len(args) == 0 || args[0] != "--check" {
+		return errors.New("replay requires --check")
+	}
+	if len(args) > 2 {
+		return errors.New("replay --check accepts at most one path")
+	}
+	workspace, err := ResolveWorkspace(".", firstArg(args[1:]))
+	if err != nil {
+		return err
+	}
+	result, err := CheckReplay(workspace)
+	if err != nil {
+		return err
+	}
+	if result.OK {
+		fmt.Fprintf(stdout, "replay ok: %s\n", workspace)
+		return nil
+	}
+	fmt.Fprintf(stdout, "replay drift: %s\n", workspace)
+	for _, issue := range result.Issues {
+		fmt.Fprintf(stdout, "- %s\n", issue)
+	}
+	return errors.New("replay check failed")
+}
+
+func CheckReplay(workspace string) (ValidationResult, error) {
+	state, err := ReadState(workspace)
+	if err != nil {
+		return ValidationResult{}, err
+	}
+	result := ValidationResult{OK: true}
+	if state.WorkspaceType != "loop" {
+		return result, nil
+	}
+	loop, err := readLoopState(workspace)
+	if err != nil {
+		return ValidationResult{}, err
+	}
+	events, err := readEvents(workspace, 0)
+	if err != nil {
+		result.OK = false
+		result.Issues = append(result.Issues, "events.jsonl parse failed: "+err.Error())
+		return result, nil
+	}
+	taskEvents := map[string]string{}
+	criterionEvents := map[string]string{}
+	for _, event := range events {
+		switch event.Type {
+		case "task_start":
+			if id := eventString(event.Data, "task"); id != "" {
+				taskEvents[id] = "active"
+			}
+		case "task_done":
+			if id := eventString(event.Data, "task"); id != "" {
+				taskEvents[id] = "done"
+			}
+		case "task_skip":
+			if id := eventString(event.Data, "task"); id != "" {
+				taskEvents[id] = "skipped"
+			}
+		case "task_block":
+			if id := eventString(event.Data, "task"); id != "" {
+				taskEvents[id] = "blocked"
+			}
+		case "criterion_satisfy":
+			if id := eventString(event.Data, "criterion"); id != "" {
+				criterionEvents[id] = "satisfied"
+			}
+		case "criterion_block":
+			if id := eventString(event.Data, "criterion"); id != "" {
+				criterionEvents[id] = "blocked"
+			}
+		}
+	}
+	for _, task := range loop.Tasks {
+		if status, ok := taskEvents[task.ID]; ok && status != task.Status {
+			result.OK = false
+			result.Issues = append(result.Issues, fmt.Sprintf("task %s event status %s disagrees with kkt.yaml status %s", task.ID, status, task.Status))
+		}
+	}
+	for _, criterion := range loop.AcceptanceCriteria {
+		if status, ok := criterionEvents[criterion.ID]; ok && status != criterion.Status {
+			result.OK = false
+			result.Issues = append(result.Issues, fmt.Sprintf("criterion %s event status %s disagrees with kkt.yaml status %s", criterion.ID, status, criterion.Status))
+		}
+	}
+	for _, issue := range evidenceMappingIssues(loop) {
+		result.OK = false
+		result.Issues = append(result.Issues, issue)
+	}
+	return result, nil
+}
+
+func evidenceMappingIssues(loop LoopState) []string {
+	var issues []string
+	for _, criterion := range loop.AcceptanceCriteria {
+		if criterion.Status != "satisfied" {
+			continue
+		}
+		if !hasRecordedEvidenceForCriterion(loop, criterion.ID) {
+			issues = append(issues, fmt.Sprintf("criterion %s is satisfied without mapped evidence", criterion.ID))
+		}
+	}
+	for _, evidence := range loop.Evidence {
+		if evidence.Status != "recorded" {
+			issues = append(issues, fmt.Sprintf("evidence %s is %s", evidence.ID, evidence.Status))
+		}
+		if strings.TrimSpace(evidence.Summary) == "" {
+			issues = append(issues, fmt.Sprintf("evidence %s has empty summary", evidence.ID))
+		}
+	}
+	return issues
+}
+
+func hasRecordedEvidenceForCriterion(loop LoopState, criterionID string) bool {
+	for _, evidence := range loop.Evidence {
+		if evidence.Status != "recorded" {
+			continue
+		}
+		for _, mapped := range evidence.Criteria {
+			if mapped == criterionID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func splitCSV(value string) []string {
+	var parts []string
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	var result []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
+}
+
+func writeJSON(stdout io.Writer, value any) error {
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(value)
+}
+
+func eventString(data map[string]any, key string) string {
+	if data == nil {
+		return ""
+	}
+	if value, ok := data[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func eventDataSummary(data map[string]any) string {
+	if len(data) == 0 {
+		return ""
+	}
+	if summary := eventString(data, "summary"); summary != "" {
+		return summary
+	}
+	if task := eventString(data, "task"); task != "" {
+		return task
+	}
+	if criterion := eventString(data, "criterion"); criterion != "" {
+		return criterion
+	}
+	if reason := eventString(data, "reason"); reason != "" {
+		return reason
+	}
+	return fmt.Sprintf("%v", data)
 }
 
 func artifactTitle(artifact string) string {

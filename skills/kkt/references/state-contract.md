@@ -25,11 +25,12 @@ kkt validate
 
 The `kkt` CLI is the canonical workflow mutation interface. Skills should use CLI commands for workspace creation, state reads, layer/artifact recording, approval, task/progress/evidence updates, validation, and completion.
 
-`kkt.yaml` is the canonical current contract. Markdown files carry rich context. For loop workspaces, `events.jsonl` is the append-only event log.
+`kkt.yaml` is the canonical current contract. Markdown files carry rich context. For loop workspaces, `events.jsonl` is the append-only event log used for resume context, audit, and replay consistency checks. It must not become a competing source of truth for current state.
 
 - Put statuses, active layer, method choices, decisions, artifact references, approvals, stop conditions, and summaries in YAML.
 - Put detailed discovery maps, modeling rationale, plans, evidence logs, and notes in Markdown.
 - Put chronological loop events such as task transitions, evidence additions, approvals, blockers, validation runs, and completion in `events.jsonl`.
+- Use `kkt replay --check` to compare event history with `kkt.yaml`; it reports drift but does not regenerate or mutate state.
 - Do not compress large discovery or modeling context into YAML if doing so would lose useful detail.
 - Do not rely on hidden session context for decisions that affect later layers.
 - Do not hand-edit `kkt.yaml` as the primary workflow operation when a CLI command exists.
@@ -108,6 +109,8 @@ loop_state:
     - id:
       summary:
       status: pending | recorded
+      criteria:
+      command:
   stop_conditions:
     - id:
       text:
