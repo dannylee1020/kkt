@@ -114,8 +114,8 @@ resolve_root() {
 
 expand_home() {
   case "$1" in
-    "~") printf '%s\n' "$HOME" ;;
-    "~/"*) printf '%s/%s\n' "$HOME" "${1#~/}" ;;
+    \~) printf '%s\n' "$HOME" ;;
+    \~/*) printf '%s/%s\n' "$HOME" "${1#~/}" ;;
     *) printf '%s\n' "$1" ;;
   esac
 }
@@ -462,9 +462,9 @@ names_for_action() {
 
 print_summary_line() {
   local label="$1"
-  local names="$2"
-  [ -n "$names" ] || return 0
-  printf '  - %s: %s\n' "$label" "$names"
+  local summary="$2"
+  [ -n "$summary" ] || return 0
+  printf '  - %s: %s\n' "$label" "$summary"
 }
 
 print_operations() {
