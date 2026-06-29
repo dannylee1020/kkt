@@ -32,7 +32,7 @@ type ValidationResult struct {
 }
 
 func StartWorkflow(root, request, profile string) (Workspace, error) {
-	if profile != "plan" && profile != "loop" && profile != "model" {
+	if profile != "plan" && profile != "loop" && profile != "model" && profile != "run" {
 		return Workspace{}, fmt.Errorf("unsupported profile %q", profile)
 	}
 	projectRootDir, err := projectRoot(root)
@@ -87,7 +87,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop first")
+			return "", errors.New("no .kkt workspace found; run kkt start plan|model|run|loop first")
 		}
 		return "", err
 	}
@@ -100,7 +100,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		if entry.Name() == "model" || entry.Name() == "loop" {
+		if entry.Name() == "model" || entry.Name() == "run" || entry.Name() == "loop" {
 			nested, readErr := os.ReadDir(filepath.Join(base, entry.Name()))
 			if readErr != nil {
 				return "", readErr
@@ -123,7 +123,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		}
 	}
 	if len(dirs) == 0 {
-		return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop first")
+		return "", errors.New("no .kkt workspace found; run kkt start plan|model|run|loop first")
 	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return dirs[i].sortKey < dirs[j].sortKey
@@ -224,7 +224,7 @@ func NextInstruction(state State) string {
 		}
 		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
-		if state.WorkspaceType == "loop" && state.ApprovalStatus != "approved" {
+		if (state.WorkspaceType == "loop" || state.WorkspaceType == "run") && state.ApprovalStatus != "approved" {
 			return "next: show the selected model and record approval with kkt approve before execution"
 		}
 		return "next: execute only the approved plan and record progress with kkt progress"
@@ -264,10 +264,26 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 			result.Issues = append(result.Issues, issue)
 		}
 	}
+	if state.WorkspaceType == "run" || state.WorkspaceType == "loop" || (state.WorkspaceType == "model" && state.ActiveLayer == "validation") {
+		if contract, guardrailErr := readGuardrails(workspace); guardrailErr == nil {
+			for _, issue := range guardrailExecutionReadinessIssues(contract) {
+				result.OK = false
+				result.Issues = append(result.Issues, issue)
+			}
+		}
+	}
 	evidence, err := os.ReadFile(filepath.Join(workspace, "evidence.md"))
+	if state.WorkspaceType == "run" && err == nil && strings.Contains(string(evidence), "Status: pending") {
+		result.OK = false
+		result.Issues = append(result.Issues, "evidence.md is still pending")
+	}
 	if state.WorkspaceType == "loop" && err == nil && strings.Contains(string(evidence), "Status: pending") {
 		result.OK = false
 		result.Issues = append(result.Issues, "evidence.md is still pending")
+	}
+	if state.WorkspaceType == "run" && state.ApprovalStatus != "approved" {
+		result.OK = false
+		result.Issues = append(result.Issues, "approval is not approved")
 	}
 	if state.WorkspaceType == "loop" {
 		if state.ApprovalStatus != "approved" {
@@ -422,6 +438,7 @@ artifact_refs:
   intent: intent.md
   discovery: discovery.md
   model: model.md
+  guardrails: guardrails.json
 approval:
   required: false
   status: not_required
@@ -429,6 +446,63 @@ approval:
 stop_conditions:
   - "No feasible model satisfies hard constraints."
   - "A product, risk, scope, or implementation tradeoff cannot be resolved from repository evidence."
+`, now.Format(time.RFC3339), escapedRequest)
+	}
+	if profile == "run" {
+		return fmt.Sprintf(`schema_version: 1
+workflow_type: kkt
+workspace_type: run
+profile: run
+status: modeling
+active_layer: intent
+created_at: %s
+request: "%s"
+layers:
+  intent:
+    status: pending
+    method: pending
+    summary: ""
+    artifact: intent.md
+  discovery:
+    status: pending
+    method: pending
+    summary: ""
+    artifact: discovery.md
+  modeling:
+    status: pending
+    method: pending
+    summary: ""
+    artifact: model.md
+  execution:
+    status: pending
+    method: pending
+    summary: ""
+    artifact: plan.md
+  validation:
+    status: pending
+    method: pending
+    summary: ""
+    artifact: evidence.md
+method_invocations: []
+decision_log: []
+artifact_refs:
+  intent: intent.md
+  discovery: discovery.md
+  model: model.md
+  guardrails: guardrails.json
+  plan: plan.md
+  progress: progress.md
+  evidence: evidence.md
+  notes: notes.md
+approval:
+  required: true
+  status: pending
+  approved_scope: ""
+stop_conditions:
+  - "No feasible plan satisfies hard constraints."
+  - "User does not approve the selected model."
+  - "Model-ready judge blocks execution."
+  - "Destructive action, credentials, paid service, or external access is required."
 `, now.Format(time.RFC3339), escapedRequest)
 	}
 	return fmt.Sprintf(`schema_version: 1
@@ -471,6 +545,7 @@ artifact_refs:
   intent: intent.md
   discovery: discovery.md
   model: model.md
+  guardrails: guardrails.json
   plan: plan.md
   progress: progress.md
   evidence: evidence.md
@@ -508,6 +583,8 @@ func workspacePath(base, profile, slug string) string {
 		return base
 	case "model":
 		return filepath.Join(base, "model", slug)
+	case "run":
+		return filepath.Join(base, "run", slug)
 	default:
 		return filepath.Join(base, "loop", slug)
 	}
@@ -519,6 +596,8 @@ func currentPointer(profile, slug string) string {
 		return "."
 	case "model":
 		return filepath.Join("model", slug)
+	case "run":
+		return filepath.Join("run", slug)
 	default:
 		return filepath.Join("loop", slug)
 	}
@@ -534,6 +613,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	files["intent.md"] = intentMarkdown(request)
 	files["discovery.md"] = "# Discovery\n\nStatus: pending\n\nRecord repo facts, discovered constraints, validation paths, and remaining unknowns here.\n"
 	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord method selection, objective function, known constraints, files to modify, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk here.\n"
+	files["guardrails.json"] = defaultGuardrailsJSON(request, profile, "")
 	if profile == "model" {
 		return files
 	}
@@ -541,7 +621,9 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	files["progress.md"] = "# Progress\n\nStatus: pending\n\n- [ ] Complete discovery\n- [ ] Complete model\n- [ ] Get approval before implementation\n- [ ] Execute approved plan\n- [ ] Validate with evidence\n"
 	files["evidence.md"] = "# Evidence\n\nStatus: pending\n\nRecord validation commands, outputs, artifacts, and final constraint audit here.\n"
 	files["notes.md"] = "# Notes\n\n"
-	files["events.jsonl"] = ""
+	if profile == "loop" {
+		files["events.jsonl"] = ""
+	}
 	return files
 }
 
@@ -551,8 +633,10 @@ func requiredFiles(workspaceType string) []string {
 		return []string{"kkt.yaml"}
 	case "model":
 		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md"}
+	case "run":
+		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "guardrails.json", "plan.md", "progress.md", "evidence.md", "notes.md"}
 	default:
-		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
+		return []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "guardrails.json", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
 	}
 }
 

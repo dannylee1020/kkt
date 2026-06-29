@@ -58,7 +58,7 @@ layer_contract:
 ```
 
 - `method_used` must name the actual method chosen, not a generic profile.
-- For `$kkt-model` and `$kkt-loop`, record chosen intent/discovery/modeling methods with `kkt intent --method`, `kkt discovery --method`, and `kkt model --method`.
+- For `$kkt-model`, `$kkt-run`, and `$kkt-loop`, record chosen intent/discovery/modeling methods with `kkt intent --method`, `kkt discovery --method`, and `kkt model --method`.
 - The fallback methods are valid method choices, but only when the specialized selector does not materially improve the model.
 - `inputs_consumed` must point to prior layer artifacts or summarize session-only input.
 - `decisions` must include enough rationale for a different agent to continue.

@@ -108,6 +108,7 @@ Choose the smallest modeling profile that fits the skill and request:
 
 - Plan profile (`kkt`): use compact intake, discovery facts, hard-constraint feasibility, lexicographic ranking, approval before implementation, and validation certificate. Keep formal method names mostly hidden unless they explain a material tradeoff.
 - Deep profile (`kkt-model`): use the layered method catalog for intent capture, discovery, coupling, method selection, candidate comparison, and user tradeoff decisions; record the selected intent, discovery, and modeling methods with `kkt ... --method`.
+- Run profile (`kkt-run`): import a completed model, validate the guardrail contract, run deterministic judge checkpoints, get approval, then execute and validate the selected plan without loop continuation state.
 - Loop profile (`kkt-loop`): front-load deeper planning, record selected intent/discovery/modeling methods with `kkt ... --method`, show the final model for approval, then execute with evidence-backed continuation.
 
 Use `references/layered-modeling-methods.md` when the request needs method selection beyond the plan profile.
@@ -117,12 +118,13 @@ Use `references/layered-modeling-methods.md` when the request needs method selec
 Use `references/state-contract.md` as the authoritative state contract.
 
 - Plan tier (`kkt`): no durable files by default. If state is needed, use one compact `.kkt/kkt.yaml`; do not create Markdown layer artifacts.
-- Model tier (`kkt-model`): use `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, and `model.md` when the model needs durable context.
-- Loop tier (`kkt-loop`): use `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md`.
+- Model tier (`kkt-model`): use `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, and `guardrails.json` when the model needs durable context.
+- Run tier (`kkt-run`): use `.kkt/run/<slug>/kkt.yaml`, imported model artifacts, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md` when a completed model should be implemented now.
+- Loop tier (`kkt-loop`): use `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, `notes.md`, and `events.jsonl`.
 
 `.kkt/` is anchored at the nearest Git/worktree root; outside Git, the CLI falls back to the current directory.
 
-Use the `kkt` CLI as the workflow control path whenever durable state exists. YAML carries canonical current state, status, decisions, method invocations, and artifact references. Markdown carries rich context that would become lossy if compressed into YAML. Loop workspaces also use `events.jsonl` as the append-only event log for task transitions, evidence, validation, approval, blockers, and completion.
+Use the `kkt` CLI as the workflow control path whenever durable state exists. YAML carries canonical current state, status, decisions, method invocations, and artifact references. Markdown carries rich context that would become lossy if compressed into YAML. `guardrails.json` carries deterministic drift policy, allowed scope, blocked scope, validation requirements, and judge checkpoint policy. Loop workspaces also use `events.jsonl` as the append-only event log for task transitions, evidence, validation, approval, blockers, and completion.
 
 ## Optimization Model
 
@@ -175,7 +177,7 @@ optimization_model:
 
 ## Optimized Plan Output
 
-Every selected model or approval-ready plan must explain the reasoning that shaped it. Keep the shape compact for `$kkt`; use the full shape for `$kkt-model` and `$kkt-loop`.
+Every selected model or approval-ready plan must explain the reasoning that shaped it. Keep the shape compact for `$kkt`; use the full shape for `$kkt-model`, `$kkt-run`, and `$kkt-loop`.
 
 ```yaml
 optimized_plan:
@@ -225,6 +227,8 @@ optimized_plan:
     Commands, checks, artifacts, or explicit limitations that will certify completion.
   execution_implications:
     Expected files, modules, APIs, workflows, migrations, or operational surfaces affected.
+  guardrail_variables:
+    Modeled constraints, allowed paths, blocked paths, required commands, and evidence requirements to write into guardrails.json.
   residual_risk:
     What remains unproven or sensitive after validation.
 ```

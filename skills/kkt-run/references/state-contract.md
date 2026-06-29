@@ -91,43 +91,6 @@ decision_log:
     constraints:
     alternatives:
     timestamp:
-planning_contract:
-  objective_function:
-    status: pending | recorded
-    summary:
-  files_to_modify:
-    status: pending | recorded
-    items:
-      - path_or_surface:
-        change_type:
-        rationale:
-  constraint_functions:
-    status: pending | recorded
-    hard:
-      - name:
-        predicate:
-        source:
-        status:
-    soft:
-      - name:
-        preference:
-        source:
-        status:
-  decision_variables:
-    status: pending | recorded
-    items:
-      - name:
-        allowed_domain:
-        chosen_value:
-        rationale:
-  validation_proof:
-    status: pending | recorded
-    commands:
-      - command:
-        expected_evidence:
-    evidence:
-      - summary:
-        artifact:
 artifact_refs:
   intent:
   discovery:
@@ -165,7 +128,7 @@ loop_state:
       status: clear | active | resolved
 ```
 
-Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml` keeps layer summaries and `planning_contract` inline and leaves Markdown artifacts empty or absent.
+Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml` can keep layer summaries inline and leave Markdown artifacts empty or absent.
 
 ## Layer Handoff Rules
 
@@ -181,7 +144,7 @@ Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml
 
 - `intent.md`: what the user wants, desired behavior, user-visible success, scope boundaries, examples, priority signals, explicit user constraints, and unresolved meaning questions.
 - `discovery.md`: files, symbols, components, functions, workflows, discovered constraints, validation paths, coupling, evidence, confidence, and unknowns.
-- `model.md`: method selection, objective function, known constraints, files to modify, constraint functions, decision variables, candidates, feasibility, selected plan, binding constraints, validation plan, validation proof required, sensitivity, execution implications, and residual risk.
+- `model.md`: method selection, objective, known constraints, decision variables, candidates, feasibility, selected plan, binding constraints, validation plan, sensitivity, execution implications, and residual risk.
 - `guardrails.json`: machine-readable drift contract with modeled constraints, allowed paths, blocked paths, required validation, and drift policy. `run` and `loop` execution must not proceed when modeled constraints or allowed paths are empty.
 - `plan.md`: execution tasks, acceptance criteria, validation plan, evidence required, stop conditions, and continuation policy.
 - `progress.md`: work log, progress narrative, and blocker notes.

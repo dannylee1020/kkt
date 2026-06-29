@@ -14,7 +14,7 @@ const usageText = `KKT Workflow CLI
 
 Usage:
   kkt --version
-  kkt start plan|model|loop <request>
+  kkt start plan|model|run|loop <request>
   kkt status [path]
   kkt next [--json] [path]
   kkt show [artifact]
@@ -22,6 +22,9 @@ Usage:
   kkt plan|progress [content]
   kkt evidence [--for criterion] [--command command] [content]
   kkt notes [content]
+  kkt guardrails show|set|validate [content]
+  kkt judge --checkpoint checkpoint [--json] [path]
+  kkt run from-model [model-workspace]
   kkt approve [scope]
   kkt criteria [add|satisfy|block] [criterion]
   kkt task [add|start|done|skip|block] [task]
@@ -57,6 +60,12 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runShow(args[1:], stdout)
 	case "intent", "discovery", "model", "plan", "progress", "evidence", "notes":
 		return runArtifact(args[0], args[1:], stdout)
+	case "guardrails":
+		return runGuardrails(args[1:], stdout)
+	case "judge":
+		return runJudge(args[1:], stdout)
+	case "run":
+		return runRun(args[1:], stdout)
 	case "approve":
 		return runApprove(args[1:], stdout)
 	case "criteria":
@@ -131,7 +140,7 @@ func runStart(args []string, stdout io.Writer) error {
 		return err
 	}
 	if len(args) < 2 {
-		return errors.New("start requires a profile and request: plan, model, or loop")
+		return errors.New("start requires a profile and request: plan, model, run, or loop")
 	}
 	selectedProfile := strings.TrimSpace(args[0])
 	request := strings.TrimSpace(strings.Join(args[1:], " "))
@@ -258,6 +267,8 @@ func startInstruction(profile string) string {
 		return "inspect relevant code/docs, record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model, then request approval before edits"
 	case "model":
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
+	case "run":
+		return "record or import the selected model, run kkt judge --checkpoint model-ready, then request approval before edits"
 	default:
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery/model/plan"
 	}

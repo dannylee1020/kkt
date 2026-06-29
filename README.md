@@ -88,11 +88,11 @@ where:
 
 ## Interface
 
-KKT is skill-first. Invoke `$kkt`, `$kkt-model`, or `$kkt-loop` from your coding agent. The CLI is the tool those skills rely on for `.kkt/` scaffolding, status, state persistence and validation,
+KKT is skill-first. Invoke `$kkt`, `$kkt-model`, `$kkt-run`, or `$kkt-loop` from your coding agent. The CLI is the tool those skills rely on for `.kkt/` scaffolding, status, guardrails, state persistence and validation,
 
 | piece | what it offers | use when |
 | --- | --- | --- |
-| Skills | Primary KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, and `$kkt-loop`. | You want KKT to guide planning, approval, implementation, and validation. |
+| Skills | Primary KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, `$kkt-run`, and `$kkt-loop`. | You want KKT to guide planning, approval, implementation, and validation. |
 | CLI | Deterministic `.kkt/` state scaffolding and validation used by the skills. | Durable state needs to stay consistent across KKT layers and continuations. |
 
 
@@ -127,16 +127,17 @@ Invoke the skill directly:
 ```text
 $kkt <feature to implement>
 $kkt-model <architecture or tradeoff question>
+$kkt-run <implement completed model>
 $kkt-loop <long-running implementation>
 ```
 
 Skill invocation syntax varies by agent:
 
 ```text
-Codex:       $kkt
-Claude Code: /kkt
-Pi:          /skill:kkt
-OpenCode:    ask OpenCode to use the kkt skill
+Codex:       $kkt, $kkt-model, $kkt-run, $kkt-loop
+Claude Code: /kkt, /kkt-model, /kkt-run, /kkt-loop
+Pi:          /skill:kkt, /skill:kkt-model, /skill:kkt-run, /skill:kkt-loop
+OpenCode:    ask OpenCode to use the relevant kkt skill
 ```
 
 The skills are installed from the downloaded source archive. The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
@@ -144,12 +145,15 @@ The skills are installed from the downloaded source archive. The CLI is download
 CLI workflow commands:
 
 ```bash
-kkt start plan|model|loop "<request>"
+kkt start plan|model|run|loop "<request>"
 kkt status
 kkt next [--json]
 kkt show [artifact]
 kkt intent|discovery --method <method> "<layer output>"
 kkt model --method <method> "<planning contract>"
+kkt guardrails show|set|validate
+kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
+kkt run from-model [model-workspace]
 kkt plan|progress
 kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
 kkt notes
@@ -163,7 +167,7 @@ kkt resume
 kkt replay --check
 ```
 
-For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and Markdown files hold rich context and evidence. `kkt replay --check` reports drift between the event history and current state without mutating either file.
+For run and loop workspaces, `guardrails.json` is the deterministic drift contract used by `kkt judge`; modeled constraints define allowed and blocked paths, and the judge compares them against current git changes. For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and Markdown files hold rich context and evidence. `kkt replay --check` reports drift between the event history and current state without mutating either file.
 
 
 ## Skills
@@ -172,9 +176,10 @@ For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl
 | --- | --- | --- | --- |
 | `$kkt` | normal feature work, bug fixes, and refactors | lightweight model, approval, implementation, validation | optional `.kkt/kkt.yaml` |
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
+| `$kkt-run` | implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
 | `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
 
-All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. For plan-tier work, it carries a compact `planning_contract` with objective function, files to modify, constraint functions, decision variables, and validation proof. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
+All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. For plan-tier work, it carries a compact `planning_contract` with objective function, files to modify, constraint functions, decision variables, and validation proof. For run and loop workspaces, `guardrails.json` is the drift contract for modeled constraints, allowed paths, blocked paths, and validation requirements. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
 
 ## Request Shape
 

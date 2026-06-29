@@ -1,0 +1,16 @@
+version: "3"
+
+vars:
+  KKT_TARGET: '{{default "codex" .KKT_TARGET}}'
+  KKT_BIN_DIR: '{{default (printf "%s/.local/bin" .HOME) .KKT_BIN_DIR}}'
+  KKT_LOCAL_VERSION: '{{default "local-dev" .KKT_LOCAL_VERSION}}'
+
+tasks:
+  install-local:
+    desc: Install local KKT skills and CLI from this checkout
+    env:
+      KKT_BUILD_FROM_SOURCE: "1"
+      KKT_VERSION: "{{.KKT_LOCAL_VERSION}}"
+    cmds:
+      - scripts/install.sh upgrade --target {{.KKT_TARGET}} --bin-dir {{.KKT_BIN_DIR}}
+      - '{{.KKT_BIN_DIR}}/kkt --version'

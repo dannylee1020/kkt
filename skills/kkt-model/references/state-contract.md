@@ -9,8 +9,9 @@ Layers are internal contract boundaries. They are not public skills and should n
 | Tier | Skill | Durable files | Use when |
 | --- | --- | --- | --- |
 | Plan | `kkt` | none by default; optional `.kkt/kkt.yaml` | the task is small enough that rich Markdown context would be overhead. |
-| Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` | the output is a durable model or decision brief before execution. |
-| Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | the task is long-running, multi-step, or needs continuation. |
+| Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `guardrails.json` | the output is a durable model or decision brief before execution. |
+| Run | `kkt-run` | `.kkt/run/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | a completed model should be implemented now without long-running continuation state. |
+| Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, `notes.md`, `events.jsonl` | the task is long-running, multi-step, or needs continuation. |
 
 Durable `.kkt/` paths are rooted at the nearest Git/worktree root. Outside Git, the CLI falls back to the current directory.
 
@@ -19,8 +20,12 @@ Use the `kkt` CLI for deterministic state scaffolding and validation:
 ```text
 kkt start plan "<request>"
 kkt start model "<request>"
+kkt run from-model [model-workspace]
+kkt start run "<request>"
 kkt start loop "<request>"
 kkt intent|discovery|model --method <method> "<layer output>"
+kkt guardrails show|set|validate
+kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
 kkt validate
 ```
 
@@ -28,12 +33,14 @@ kkt validate
 
 The `kkt` CLI is the canonical workflow mutation interface. Skills should use CLI commands for workspace creation, state reads, layer/artifact recording, approval, task/progress/evidence updates, validation, and completion.
 
-`kkt.yaml` is the canonical current contract. Markdown files carry rich context. For loop workspaces, `events.jsonl` is the append-only event log used for resume context, audit, and replay consistency checks. It must not become a competing source of truth for current state.
+`kkt.yaml` is the canonical current contract. Markdown files carry rich context. `guardrails.json` is the deterministic drift contract. For loop workspaces, `events.jsonl` is the append-only event log used for resume context, audit, and replay consistency checks. It must not become a competing source of truth for current state.
 
 - Put statuses, active layer, method choices, decisions, artifact references, approvals, stop conditions, and summaries in YAML.
 - Put detailed discovery maps, modeling rationale, plans, evidence logs, and notes in Markdown.
+- Put modeled constraints, allowed paths, blocked paths, validation requirements, and drift policy in `guardrails.json`.
 - Put chronological loop events such as task transitions, evidence additions, approvals, blockers, validation runs, and completion in `events.jsonl`.
 - Use `kkt replay --check` to compare event history with `kkt.yaml`; it reports drift but does not regenerate or mutate state.
+- Use `kkt judge --checkpoint <checkpoint> --json` for deterministic guardrail checks. A `block` verdict stops execution until repaired; `warn` requires judgment and should be repaired before risky edits; `allow` permits the next workflow step.
 - Do not compress large discovery or modeling context into YAML if doing so would lose useful detail.
 - Do not rely on hidden session context for decisions that affect later layers.
 - Do not hand-edit `kkt.yaml` as the primary workflow operation when a CLI command exists.
@@ -42,8 +49,8 @@ The `kkt` CLI is the canonical workflow mutation interface. Skills should use CL
 
 ```yaml
 schema_version: 1
-workspace_type: plan | model | loop
-profile: plan | model | loop
+workspace_type: plan | model | run | loop
+profile: plan | model | run | loop
 status: initialized | modeling | approved | executing | validating | complete | blocked
 active_layer: intent | discovery | modeling | execution | validation
 layers:
@@ -125,6 +132,7 @@ artifact_refs:
   intent:
   discovery:
   model:
+  guardrails:
   plan:
   progress:
   evidence:
@@ -174,8 +182,67 @@ Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml
 - `intent.md`: what the user wants, desired behavior, user-visible success, scope boundaries, examples, priority signals, explicit user constraints, and unresolved meaning questions.
 - `discovery.md`: files, symbols, components, functions, workflows, discovered constraints, validation paths, coupling, evidence, confidence, and unknowns.
 - `model.md`: method selection, objective function, known constraints, files to modify, constraint functions, decision variables, candidates, feasibility, selected plan, binding constraints, validation plan, validation proof required, sensitivity, execution implications, and residual risk.
+- `guardrails.json`: machine-readable drift contract with modeled constraints, allowed paths, blocked paths, required validation, and drift policy. `run` and `loop` execution must not proceed when modeled constraints or allowed paths are empty.
 - `plan.md`: execution tasks, acceptance criteria, validation plan, evidence required, stop conditions, and continuation policy.
 - `progress.md`: work log, progress narrative, and blocker notes.
 - `evidence.md`: validation map, command outputs, artifacts, and final certificate.
 - `notes.md`: observations, assumptions, open questions, and deferred ideas.
 - `events.jsonl`: append-only loop event history for replay, audit, and continuation context.
+
+## Judge Checkpoints
+
+- `model-ready`: run before implementation starts. Blocks run and loop execution when the model, guardrail constraints, or allowed path bounds are incomplete.
+- `pre-mutation`: run before file edits or other side effects. Blocks when approval is missing for run or loop workspaces, or when current git changes are outside `allowed_paths` or inside `blocked_paths`.
+- `continuation`: run before loop continuation. Blocks on active stop conditions or replay drift.
+- `finalize`: run before `kkt done`. Blocks when workspace validation fails or current git changes violate path bounds.
+- `pre-tool`, `post-tool`, `pre-compact`, and `post-compact`: portable hook names for agent adapters. The deterministic CLI checks workspace state and path bounds.
+
+## Guardrails Shape
+
+Use this compact shape for new `guardrails.json` files:
+
+```json
+{
+  "schema_version": 1,
+  "source": {
+    "workspace_type": "model",
+    "workspace": ".kkt/model/<slug>",
+    "request": ""
+  },
+  "constraints": [
+    {
+      "id": "stable-contract",
+      "kind": "architecture",
+      "severity": "block",
+      "statement": "Preserve the selected model's public contract.",
+      "allowed_paths": ["internal/workflow/**"],
+      "blocked_paths": ["dist/**"]
+    }
+  ],
+  "change_bounds": {
+    "allowed_paths": ["internal/workflow/**"],
+    "blocked_paths": [".git/**", ".env*", "dist/**"],
+    "require_explicit_approval_outside_allowed": true
+  },
+  "workflow": {
+    "execution_mode": "run",
+    "requires_approval_before_mutation": true,
+    "requires_validation_before_done": true
+  },
+  "validation": {
+    "acceptance_criteria": [],
+    "required_commands": [],
+    "evidence_required": ["scope audit confirms only allowed paths changed"]
+  },
+  "drift_policy": {
+    "block_on": [
+      "missing_approval",
+      "empty_allowed_paths",
+      "changed_path_outside_allowed",
+      "changed_blocked_path",
+      "validation_failed"
+    ],
+    "warn_on": []
+  }
+}
+```

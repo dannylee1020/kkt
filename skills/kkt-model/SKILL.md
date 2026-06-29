@@ -25,6 +25,8 @@ kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
 kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<objective_function, files_to_modify, constraint_functions, decision_variables, validation_proof, and selected model>"
+kkt guardrails set '<constraints and path bounds JSON>'
+kkt guardrails validate
 kkt validate
 kkt done
 ```
@@ -43,7 +45,8 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 8. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
 9. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
 10. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
-11. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, and `kkt validate` when a workspace exists.
+11. Translate the selected model into guardrail variables: constraints, allowed paths, blocked paths, validation evidence, and required commands.
+12. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, `kkt guardrails validate`, and `kkt validate` when a workspace exists.
 
 ## End States
 
@@ -55,11 +58,11 @@ End with one of:
 
 For each serious alternative, include the method used, objective fit, decision-variable assignments, hard-constraint status, binding constraints, tradeoffs, execution-contract implications, residual risks, and when to choose it.
 
-Decision briefs must include the optimized-plan reasoning from `references/feature-optimization-model.md`: objective function, known constraints, files to modify or affected surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk.
+Decision briefs must include the optimized-plan reasoning from `references/feature-optimization-model.md`: objective function, known constraints, files to modify or affected surfaces, forbidden files or surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk.
 
 ## Durable Output
 
-For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. Do not create execution files unless switching to `$kkt-loop`.
+For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. `guardrails.json` carries the modeled constraints and path bounds that `$kkt-run` or `$kkt-loop` will enforce before mutation. Do not create execution files unless switching to `$kkt-run` or `$kkt-loop`.
 
 ## Do Not
 
@@ -69,3 +72,4 @@ For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kk
 - Do not ask for user input before inspecting discoverable context.
 - Do not choose a method because it sounds rigorous; choose it because the decision shape calls for it.
 - Do not recommend a model without selected-plan binding constraints and execution implications.
+- Do not finish a durable model without guardrail constraints and non-empty allowed paths.

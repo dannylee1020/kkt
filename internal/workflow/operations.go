@@ -569,6 +569,8 @@ func artifactPath(workspace, artifact string) (string, error) {
 	switch artifact {
 	case "state", "yaml", "kkt":
 		return filepath.Join(workspace, "kkt.yaml"), nil
+	case "guardrails":
+		return filepath.Join(workspace, "guardrails.json"), nil
 	case "intent", "discovery", "model", "plan", "progress", "evidence", "notes":
 		return filepath.Join(workspace, artifact+".md"), nil
 	case "events", "log":
@@ -690,7 +692,7 @@ func nextActiveLayer(state State, artifact string) string {
 		if state.WorkspaceType == "model" {
 			return "validation"
 		}
-		if state.WorkspaceType == "loop" {
+		if state.WorkspaceType == "loop" || state.WorkspaceType == "run" {
 			return "execution"
 		}
 		return "modeling"
@@ -1391,6 +1393,10 @@ func continueLayerAction(state State) NextAction {
 }
 
 func nextActionForWorkspace(workspace string, state State) NextAction {
+	if state.WorkspaceType == "run" && state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
+		instruction := "next: show the selected model and record approval with kkt approve before execution"
+		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
+	}
 	if state.WorkspaceType != "loop" {
 		return continueLayerAction(state)
 	}

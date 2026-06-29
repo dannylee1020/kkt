@@ -59,7 +59,7 @@ func TestStartWorkflowCreatesModelWorkspace(t *testing.T) {
 	if got, want := filepath.Dir(workspace.Path), filepath.Join(root, ".kkt", "model"); got != want {
 		t.Fatalf("workspace parent = %q, want %q", got, want)
 	}
-	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md"}
+	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "guardrails.json"}
 	for _, name := range required {
 		if _, err := os.Stat(filepath.Join(workspace.Path, name)); err != nil {
 			t.Fatalf("missing %s: %v", name, err)
@@ -86,7 +86,7 @@ func TestStartWorkflowCreatesLoopWorkspace(t *testing.T) {
 	if got, want := filepath.Dir(workspace.Path), filepath.Join(root, ".kkt", "loop"); got != want {
 		t.Fatalf("workspace parent = %q, want %q", got, want)
 	}
-	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
+	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "guardrails.json", "plan.md", "progress.md", "evidence.md", "notes.md", "events.jsonl"}
 	for _, name := range required {
 		if _, err := os.Stat(filepath.Join(workspace.Path, name)); err != nil {
 			t.Fatalf("missing %s: %v", name, err)
@@ -101,6 +101,33 @@ func TestStartWorkflowCreatesLoopWorkspace(t *testing.T) {
 	}
 	if text := string(state); !strings.Contains(text, "active_layer: intent") || !strings.Contains(text, "method_invocations: []") {
 		t.Fatalf("loop workspace should start with pending method selection:\n%s", text)
+	}
+}
+
+func TestStartWorkflowCreatesRunWorkspace(t *testing.T) {
+	root := t.TempDir()
+	workspace, err := StartWorkflow(root, "execute selected model", "run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := filepath.Dir(workspace.Path), filepath.Join(root, ".kkt", "run"); got != want {
+		t.Fatalf("workspace parent = %q, want %q", got, want)
+	}
+	required := []string{"kkt.yaml", "intent.md", "discovery.md", "model.md", "guardrails.json", "plan.md", "progress.md", "evidence.md", "notes.md"}
+	for _, name := range required {
+		if _, err := os.Stat(filepath.Join(workspace.Path, name)); err != nil {
+			t.Fatalf("missing %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(workspace.Path, "events.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("events.jsonl should not exist for run workspace: %v", err)
+	}
+	state, err := os.ReadFile(filepath.Join(workspace.Path, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(state); !strings.Contains(text, "workspace_type: run") || !strings.Contains(text, "guardrails: guardrails.json") {
+		t.Fatalf("run state missing expected contract:\n%s", text)
 	}
 }
 

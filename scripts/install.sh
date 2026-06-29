@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-skill_names=("kkt" "kkt-loop" "kkt-model")
+skill_names=("kkt" "kkt-loop" "kkt-model" "kkt-run")
 legacy_skill_names=("kkt-intent" "kkt-discovery" "kkt-modeling" "kkt-execution" "kkt-validation")
 native_targets=("codex" "claude" "pi" "opencode")
 
@@ -35,6 +35,9 @@ Commands:
   upgrade           Remove known old KKT skill directories, then install the latest skills and CLI.
   uninstall         Remove KKT skill directories and CLI.
   doctor            Check that source skills are present.
+
+Environment:
+  KKT_BUILD_FROM_SOURCE  Build the CLI from source without downloading a release binary.
 
 Default install auto-detects supported coding agents and writes to:
   ~/.agents/skills   (Codex, Pi, OpenCode)

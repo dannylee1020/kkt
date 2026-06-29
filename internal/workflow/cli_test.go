@@ -2,7 +2,9 @@ package workflow
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,6 +129,242 @@ func TestRunArtifactRejectsInvalidLayerMethod(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unsupported model method") {
 		t.Fatalf("error = %q, want unsupported model method", err.Error())
+	}
+}
+
+func TestRunGuardrailsShowAndValidate(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "model", "choose", "API", "shape"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+
+	var show bytes.Buffer
+	if err := Run([]string{"guardrails", "show"}, &show, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := show.String(); !strings.Contains(text, `"schema_version": 1`) || !strings.Contains(text, `"drift_policy"`) {
+		t.Fatalf("guardrails show missing contract fields:\n%s", text)
+	}
+
+	var validate bytes.Buffer
+	if err := Run([]string{"guardrails", "validate"}, &validate, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := validate.String(); !strings.Contains(text, "valid:") {
+		t.Fatalf("guardrails validate did not pass:\n%s", text)
+	}
+}
+
+func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "model", "choose", "API", "shape"},
+		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
+		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
+		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"guardrails", "set", testGuardrailsJSON("model", []string{"internal/workflow/**"}, nil)},
+		{"done", "Model complete"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var created bytes.Buffer
+	if err := Run([]string{"run", "from-model"}, &created, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := created.String(); !strings.Contains(text, "profile: run") {
+		t.Fatalf("run from-model output missing run profile:\n%s", text)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(filepath.Dir(workspace)) != "run" {
+		t.Fatalf("current workspace = %q, want run workspace", workspace)
+	}
+
+	var judge bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "model-ready", "--json"}, &judge, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := judge.String(); !strings.Contains(text, `"verdict": "allow"`) || !strings.Contains(text, `"workspace_type": "run"`) {
+		t.Fatalf("model-ready judge should allow complete run contract:\n%s", text)
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := next.String(); !strings.Contains(text, `"action": "request_approval"`) || !strings.Contains(text, `"blocked": true`) {
+		t.Fatalf("run next should request approval before mutation:\n%s", text)
+	}
+
+	var blocked bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("pre-mutation judge should block without approval")
+	}
+	if text := blocked.String(); !strings.Contains(text, `"verdict": "block"`) || !strings.Contains(text, `"drift_type": "approval"`) {
+		t.Fatalf("pre-mutation judge output missing approval block:\n%s", text)
+	}
+}
+
+func TestRunJudgeBlocksChangedPathOutsideAllowedBounds(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	initGit(t, root)
+
+	commands := [][]string{
+		{"start", "run", "path", "scope"},
+		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
+		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
+		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"approve", "Approved workflow-only scope"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("out of scope\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var blocked bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("pre-mutation judge should block changed files outside allowed paths")
+	}
+	if text := blocked.String(); !strings.Contains(text, `"drift_type": "path_scope"`) || !strings.Contains(text, "changed path outside allowed bounds: README.md") {
+		t.Fatalf("pre-mutation judge output missing path-scope block:\n%s", text)
+	}
+}
+
+func TestRunJudgeAllowsChangedPathInsideAllowedBounds(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	initGit(t, root)
+
+	commands := [][]string{
+		{"start", "run", "path", "scope"},
+		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
+		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
+		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"approve", "Approved workflow-only scope"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, "internal", "workflow"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "internal", "workflow", "change.go"), []byte("package workflow\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var allowed bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &allowed, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := allowed.String(); !strings.Contains(text, `"verdict": "allow"`) {
+		t.Fatalf("pre-mutation judge should allow in-scope changes:\n%s", text)
+	}
+}
+
+func TestRunJudgeBlockedPathOverridesAllowedBounds(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	initGit(t, root)
+
+	commands := [][]string{
+		{"start", "run", "path", "scope"},
+		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
+		{"discovery", "--method", "traceability_matrix", "Expected broad change"},
+		{"model", "--method", "lexicographic", "Selected broad plan with README blocked"},
+		{"guardrails", "set", testGuardrailsJSON("run", []string{"**"}, []string{"README.md"})},
+		{"approve", "Approved broad scope"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("blocked\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var blocked bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("pre-mutation judge should block explicitly blocked paths")
+	}
+	if text := blocked.String(); !strings.Contains(text, `"drift_type": "path_scope"`) || !strings.Contains(text, "changed blocked path: README.md") {
+		t.Fatalf("pre-mutation judge output missing blocked-path evidence:\n%s", text)
 	}
 }
 
@@ -297,6 +535,7 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "upgrade", "kkt", "loop"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
 		{"approve", "Approved test loop"},
 		{"task", "add", "Inspect code"},
 		{"task", "start", "inspect-code"},
@@ -565,5 +804,57 @@ func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
 	text := stdout.String()
 	if !strings.Contains(text, "approval is not approved") || !strings.Contains(text, "criterion evidence-recorded is satisfied without mapped evidence") {
 		t.Fatalf("done output missing terminal invariant failures:\n%s", text)
+	}
+}
+
+func testGuardrailsJSON(executionMode string, allowedPaths, blockedPaths []string) string {
+	payload := map[string]any{
+		"schema_version": 1,
+		"source": map[string]any{
+			"workspace_type": executionMode,
+			"workspace":      "",
+			"request":        "test request",
+		},
+		"constraints": []map[string]any{
+			{
+				"id":            "test-scope",
+				"kind":          "scope",
+				"severity":      "block",
+				"statement":     "Stay inside the modeled test scope.",
+				"allowed_paths": allowedPaths,
+				"blocked_paths": blockedPaths,
+			},
+		},
+		"change_bounds": map[string]any{
+			"allowed_paths": allowedPaths,
+			"blocked_paths": blockedPaths,
+		},
+		"workflow": map[string]any{
+			"execution_mode":                    executionMode,
+			"requires_approval_before_mutation": executionMode == "run" || executionMode == "loop",
+			"requires_validation_before_done":   true,
+		},
+		"validation": map[string]any{
+			"acceptance_criteria": []string{"test scope is enforced"},
+			"required_commands":   []string{"go test ./..."},
+			"evidence_required":   []string{"scope audit confirms only allowed paths changed"},
+		},
+		"drift_policy": map[string]any{
+			"block_on": []string{"missing_approval", "empty_allowed_paths", "changed_path_outside_allowed", "changed_blocked_path", "validation_failed"},
+			"warn_on":  []string{},
+		},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		panic(err)
+	}
+	return string(encoded)
+}
+
+func initGit(t *testing.T, root string) {
+	t.Helper()
+	command := exec.Command("git", "-C", root, "init")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v\n%s", err, output)
 	}
 }

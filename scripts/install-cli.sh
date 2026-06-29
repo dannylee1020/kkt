@@ -21,6 +21,7 @@ Options:
 Environment:
   KKT_INSTALL_URL           Source archive URL. Defaults to main branch archive.
   KKT_BINARY_URL            Explicit prebuilt kkt binary URL.
+  KKT_BUILD_FROM_SOURCE     Build the CLI from source without downloading a release binary.
   KKT_VERSION               GitHub Release tag to install. Defaults to latest.
 EOF
 }
@@ -169,10 +170,11 @@ parse_args() {
 }
 
 install_cli() {
-  local kkt_command binary_url root
+  local kkt_command binary_url build_from_source root
   kkt_command="$(expand_home "$bin_dir")/kkt"
+  build_from_source="${KKT_BUILD_FROM_SOURCE:-}"
   binary_url="${KKT_BINARY_URL:-}"
-  if [ -z "$binary_url" ]; then
+  if [ -z "$binary_url" ] && [ "$build_from_source" != "1" ] && [ "$build_from_source" != "true" ]; then
     binary_url="$(default_binary_url || true)"
   fi
 
