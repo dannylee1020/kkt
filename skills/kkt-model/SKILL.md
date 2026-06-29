@@ -38,7 +38,7 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 3. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs before choosing a model.
 4. Separate explicit requirements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
 5. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
-6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. If the basic method is enough, say why instead of silently defaulting.
+6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
 7. Build the shared optimization model from intent and discovery: objective, system state, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
 8. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
 9. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
@@ -54,6 +54,8 @@ End with one of:
 - `No feasible model`: the hard constraints that block feasibility and the relaxation that would restore it.
 
 For each serious alternative, include the method used, objective fit, decision-variable assignments, hard-constraint status, binding constraints, tradeoffs, execution-contract implications, residual risks, and when to choose it.
+
+Decision briefs must include the optimized-plan reasoning from `references/feature-optimization-model.md`: objective, known constraints, decision variables, candidate feasibility, selected plan, binding constraints, validation plan, execution implications, and residual risk.
 
 ## Durable Output
 

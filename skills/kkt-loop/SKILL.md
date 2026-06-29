@@ -59,8 +59,8 @@ Loop workspaces use:
 3. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass.
 4. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
 5. Inspect relevant repo context and validation paths before writing the model.
-6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. If the basic method is enough, say why instead of silently defaulting.
-7. Build the optimization model and execution contract from intent and discovery using the loop profile.
+6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
+7. Build the optimization model and execution contract from intent and discovery using the loop profile. The pre-approval output must include objective, known constraints, decision variables, candidate feasibility, selected plan, binding constraints, validation plan, execution implications, residual risk, acceptance criteria, evidence required, and stop conditions.
 8. Show the final model and wait for explicit approval.
 9. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
 10. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.

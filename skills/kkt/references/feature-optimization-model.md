@@ -170,6 +170,47 @@ optimization_model:
 
 `request_intake.intent.user_visible_success` is user meaning, not a validation command. Discovery and modeling translate it into acceptance criteria, validation plan, and evidence required before implementation.
 
+## Optimized Plan Output
+
+Every selected model or approval-ready plan must explain the reasoning that shaped it. Keep the shape compact for `$kkt`; use the full shape for `$kkt-model` and `$kkt-loop`.
+
+```yaml
+optimized_plan:
+  objective:
+    What outcome is being optimized for.
+  known_constraints:
+    explicit:
+      Constraints stated by the user.
+    discovered:
+      Constraints observed in code, docs, tests, schemas, config, runtime, or repo state.
+    inferred:
+      Constraints inferred from architecture, compatibility, risk, or conventions.
+    assumptions:
+      Conservative assumptions carried because they are reversible or low risk.
+  decision_variables:
+    - name:
+      allowed_domain:
+      chosen_value:
+      rationale:
+  candidates:
+    feasible:
+      Plans that satisfy all hard constraints.
+    rejected:
+      Plans rejected because they violate constraints or lose on objective fit.
+  selected_plan:
+    The chosen feasible plan and why it dominates the alternatives.
+  binding_constraints:
+    Constraints that actively shaped the selected plan.
+  validation_plan:
+    Checks or evidence needed to prove the plan.
+  execution_implications:
+    Expected files, modules, APIs, workflows, migrations, or operational surfaces affected.
+  residual_risk:
+    What remains unproven or sensitive after validation.
+```
+
+Do not hide constraints inside prose. If a field is not relevant, write `none` or a short reason. Do not invent certainty; label assumptions as assumptions.
+
 ## Implementation Approval Gate
 
 For implementation modes (`implement` and `loop`), show the final modeling result and wait for explicit user approval before mutating files, creating a durable workspace, launching a goal, or starting execution.
@@ -177,6 +218,8 @@ For implementation modes (`implement` and `loop`), show the final modeling resul
 The modeling result must include:
 
 - objective;
+- known constraints;
+- decision variables;
 - selected plan;
 - rejected alternatives or infeasible paths when relevant;
 - binding constraints;

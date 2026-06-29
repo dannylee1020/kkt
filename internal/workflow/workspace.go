@@ -483,7 +483,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	}
 	files["intent.md"] = intentMarkdown(request)
 	files["discovery.md"] = "# Discovery\n\nStatus: pending\n\nRecord repo facts, discovered constraints, validation paths, and remaining unknowns here.\n"
-	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord candidate plans, feasibility checks, selected plan, binding constraints, and residual risk here.\n"
+	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord method selection, objective, known constraints, decision variables, candidate feasibility, selected plan, binding constraints, validation plan, execution implications, and residual risk here.\n"
 	if profile == "model" {
 		return files
 	}

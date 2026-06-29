@@ -26,6 +26,7 @@ Use for `$kkt-model` and complex planning.
 - Use a goal / anti-goal frame, WHY / HOW ladder, and obstacle questions to clarify user meaning.
 - Build a discovery map with traceability, coupling, blast radius, and evidence confidence.
 - Select and record one intent method, one discovery method, and one modeling method based on the decision shape.
+- If no specialized method fits, use the fallback set: `goal_anti_goal` for intent, `traceability_matrix` for discovery, and `lexicographic` for modeling. Record why the fallback is sufficient; do not invent a new method.
 - Compare candidate models, reject infeasible options, and explain binding constraints.
 - End with a selected model, a decision brief, or the smallest unresolved user decisions.
 
@@ -58,6 +59,7 @@ layer_contract:
 
 - `method_used` must name the actual method chosen, not a generic profile.
 - For `$kkt-model` and `$kkt-loop`, record chosen intent/discovery/modeling methods with `kkt intent --method`, `kkt discovery --method`, and `kkt model --method`.
+- The fallback methods are valid method choices, but only when the specialized selector does not materially improve the model.
 - `inputs_consumed` must point to prior layer artifacts or summarize session-only input.
 - `decisions` must include enough rationale for a different agent to continue.
 - `unknowns` must distinguish harmless uncertainty from blocking ambiguity.
@@ -155,10 +157,14 @@ Do not invent numeric scores for subjective criteria. Prefer ordinal labels unle
 Output contract:
 
 - method selected and why;
-- candidate plans or models;
+- objective;
+- known constraints grouped as explicit, discovered, inferred, and assumptions;
+- decision variables with allowed domains, chosen values, and rationale;
+- candidate plans or models, including feasible and rejected options;
 - infeasible options and violated constraints;
-- selected plan;
-- binding constraints;
+- selected plan and why it dominates alternatives;
+- binding constraints and non-binding constraints checked;
+- validation plan;
 - sensitivity notes;
 - execution-contract implications.
 

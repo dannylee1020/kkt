@@ -47,7 +47,7 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 
 For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Switch to `$kkt-model` for deeper non-mutating modeling or `$kkt-loop` for long-running continuation.
 
-Before implementation, expose: objective, selected plan, rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
+Before implementation, expose a compact optimized plan: objective, known constraints, decision variables, selected plan, rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 
 Final audit shape:
 

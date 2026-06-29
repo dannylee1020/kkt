@@ -136,7 +136,7 @@ Omit artifact keys that do not apply to the tier. For `kkt`, a compact `kkt.yaml
 
 - `intent.md`: what the user wants, desired behavior, user-visible success, scope boundaries, examples, priority signals, explicit user constraints, and unresolved meaning questions.
 - `discovery.md`: files, symbols, components, functions, workflows, discovered constraints, validation paths, coupling, evidence, confidence, and unknowns.
-- `model.md`: method selection, candidates, feasibility, selected plan, binding constraints, sensitivity, and execution implications.
+- `model.md`: method selection, objective, known constraints, decision variables, candidates, feasibility, selected plan, binding constraints, validation plan, sensitivity, execution implications, and residual risk.
 - `plan.md`: execution tasks, acceptance criteria, validation plan, evidence required, stop conditions, and continuation policy.
 - `progress.md`: work log, progress narrative, and blocker notes.
 - `evidence.md`: validation map, command outputs, artifacts, and final certificate.
