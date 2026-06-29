@@ -35,9 +35,13 @@ func StartWorkflow(root, request, profile string) (Workspace, error) {
 	if profile != "plan" && profile != "loop" && profile != "model" {
 		return Workspace{}, fmt.Errorf("unsupported profile %q", profile)
 	}
+	projectRootDir, err := projectRoot(root)
+	if err != nil {
+		return Workspace{}, err
+	}
 	now := time.Now().UTC()
 	slug := fmt.Sprintf("%s-%s", now.Format("20060102-150405"), slugify(request))
-	base := filepath.Join(root, ".kkt")
+	base := filepath.Join(projectRootDir, ".kkt")
 	workspace := workspacePath(base, profile, slug)
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		return Workspace{}, err
@@ -67,7 +71,11 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		return candidate, nil
 	}
 
-	base := filepath.Join(root, ".kkt")
+	projectRootDir, err := projectRoot(root)
+	if err != nil {
+		return "", err
+	}
+	base := filepath.Join(projectRootDir, ".kkt")
 	current, err := os.ReadFile(filepath.Join(base, "current"))
 	if err == nil {
 		path := filepath.Clean(filepath.Join(base, strings.TrimSpace(string(current))))
@@ -121,6 +129,33 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		return dirs[i].sortKey < dirs[j].sortKey
 	})
 	return dirs[len(dirs)-1].path, nil
+}
+
+func projectRoot(start string) (string, error) {
+	root, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		root = filepath.Dir(root)
+	}
+	fallback := root
+	for {
+		if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
+			return root, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			return fallback, nil
+		}
+		root = parent
+	}
 }
 
 func ReadState(workspace string) (State, error) {

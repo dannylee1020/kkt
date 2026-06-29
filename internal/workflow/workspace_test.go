@@ -97,6 +97,114 @@ func TestResolveWorkspaceUsesCurrentPointer(t *testing.T) {
 	}
 }
 
+func TestStartWorkflowUsesNearestGitRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "packages", "app")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	workspace, err := StartWorkflow(nested, "anchor workspace at project root", "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := workspace.Path, filepath.Join(root, ".kkt"); got != want {
+		t.Fatalf("workspace = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(nested, ".kkt")); !os.IsNotExist(err) {
+		t.Fatalf("nested .kkt should not exist: %v", err)
+	}
+}
+
+func TestResolveWorkspaceUsesProjectRootFromNestedDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	firstNested := filepath.Join(root, "packages", "app")
+	secondNested := filepath.Join(root, "cmd", "tool")
+	if err := os.MkdirAll(firstNested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(secondNested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := StartWorkflow(firstNested, "choose API shape", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := ResolveWorkspace(secondNested, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != created.Path {
+		t.Fatalf("resolved = %q, want %q", resolved, created.Path)
+	}
+}
+
+func TestProjectRootAcceptsGitFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: ../.git/worktrees/app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	workspace, err := StartWorkflow(nested, "support worktree roots", "plan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := workspace.Path, filepath.Join(root, ".kkt"); got != want {
+		t.Fatalf("workspace = %q, want %q", got, want)
+	}
+}
+
+func TestProjectRootFallsBackToStartOutsideGit(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, err := projectRoot(nested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != nested {
+		t.Fatalf("projectRoot = %q, want %q", resolved, nested)
+	}
+}
+
+func TestResolveWorkspaceUsesExplicitPathOutsideProjectRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "src")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	external := t.TempDir()
+	created, err := StartWorkflow(external, "external explicit workspace", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, err := ResolveWorkspace(nested, created.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != created.Path {
+		t.Fatalf("resolved = %q, want %q", resolved, created.Path)
+	}
+}
+
 func TestValidateWorkspaceFailsPendingEvidence(t *testing.T) {
 	root := t.TempDir()
 	workspace, err := StartWorkflow(root, "implement KKT workflow CLI", "loop")

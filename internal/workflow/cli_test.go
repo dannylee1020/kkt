@@ -115,6 +115,47 @@ func TestPlanArtifactCommandsStayInStateFile(t *testing.T) {
 	}
 }
 
+func TestRunStartFromNestedDirectoryUsesProjectRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "packages", "app")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(nested); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run([]string{"start", "loop", "anchor", "state"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	projectRoot, err := projectRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(workspace) != filepath.Join(projectRoot, ".kkt", "loop") {
+		t.Fatalf("workspace = %q, want parent under project root .kkt/loop", workspace)
+	}
+	if _, err := os.Stat(filepath.Join(nested, ".kkt")); !os.IsNotExist(err) {
+		t.Fatalf("nested .kkt should not exist: %v", err)
+	}
+}
+
 func TestRunLoopCommandLifecycle(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()

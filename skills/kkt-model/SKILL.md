@@ -56,7 +56,7 @@ For each serious alternative, include the method used, objective fit, decision-v
 
 ## Durable Output
 
-For substantial modeling work, use `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. Do not create execution files unless switching to `$kkt-loop`.
+For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. Do not create execution files unless switching to `$kkt-loop`.
 
 ## Do Not
 

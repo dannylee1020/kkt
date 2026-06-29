@@ -120,6 +120,8 @@ Use `references/state-contract.md` as the authoritative state contract.
 - Model tier (`kkt-model`): use `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, and `model.md` when the model needs durable context.
 - Loop tier (`kkt-loop`): use `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, and `notes.md`.
 
+`.kkt/` is anchored at the nearest Git/worktree root; outside Git, the CLI falls back to the current directory.
+
 Use the `kkt` CLI as the workflow control path whenever durable state exists. YAML carries canonical current state, status, decisions, method invocations, and artifact references. Markdown carries rich context that would become lossy if compressed into YAML. Loop workspaces also use `events.jsonl` as the append-only event log for task transitions, evidence, validation, approval, blockers, and completion.
 
 ## Optimization Model

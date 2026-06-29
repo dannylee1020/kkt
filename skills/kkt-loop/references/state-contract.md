@@ -12,6 +12,8 @@ Layers are internal contract boundaries. They are not public skills and should n
 | Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md` | the output is a durable model or decision brief before execution. |
 | Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | the task is long-running, multi-step, or needs continuation. |
 
+Durable `.kkt/` paths are rooted at the nearest Git/worktree root. Outside Git, the CLI falls back to the current directory.
+
 Use the `kkt` CLI for deterministic state scaffolding and validation:
 
 ```text

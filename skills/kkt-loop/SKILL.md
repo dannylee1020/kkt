@@ -44,7 +44,7 @@ If `kkt` is missing, stop and ask the user to install or upgrade KKT. Do not han
 
 ## Durable State
 
-Create `.kkt/loop/<slug>/` only after approval by running `kkt start loop "<user request>"`. Use `references/state-contract.md` for file layout, YAML shape, artifact boundaries, and loop-state semantics.
+Create project-root `.kkt/loop/<slug>/` only after approval by running `kkt start loop "<user request>"`. Use `references/state-contract.md` for file layout, YAML shape, artifact boundaries, and loop-state semantics.
 
 Loop workspaces use:
 
@@ -69,7 +69,7 @@ Loop workspaces use:
 ## Goal Objective Template
 
 ```text
-Execute the KKT workspace at .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status, kkt next, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate, and kkt done as the workflow control surface. Re-read state before each continuation, re-optimize only when evidence changes feasibility, and stop only for listed stop conditions, proven acceptance criteria, or explicit user input.
+Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status, kkt next, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate, and kkt done as the workflow control surface. Re-read state before each continuation, re-optimize only when evidence changes feasibility, and stop only for listed stop conditions, proven acceptance criteria, or explicit user input.
 ```
 
 Do not set a token budget unless the user explicitly provides one.
