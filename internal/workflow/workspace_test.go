@@ -36,6 +36,18 @@ func TestStartWorkflowCreatesPlanState(t *testing.T) {
 	if text := string(state); !strings.Contains(text, "workspace_type: plan") || !strings.Contains(text, "profile: plan") {
 		t.Fatalf("plan state did not use plan profile:\n%s", text)
 	}
+	for _, want := range []string{
+		"planning_contract:",
+		"objective_function:",
+		"files_to_modify:",
+		"constraint_functions:",
+		"decision_variables:",
+		"validation_proof:",
+	} {
+		if !strings.Contains(string(state), want) {
+			t.Fatalf("plan state missing %q:\n%s", want, state)
+		}
+	}
 }
 
 func TestStartWorkflowCreatesModelWorkspace(t *testing.T) {

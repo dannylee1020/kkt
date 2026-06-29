@@ -215,12 +215,12 @@ func NextInstruction(state State) string {
 		return "next: record adaptive intent with kkt intent --method <method>, then inspect the repo and record discovery with kkt discovery --method <method>"
 	case "discovery":
 		if state.WorkspaceType == "plan" {
-			return "next: inspect the repo, then record the selected model with kkt model before edits"
+			return "next: inspect the repo, then record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model before edits"
 		}
 		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery --method <method>"
 	case "modeling":
 		if state.WorkspaceType == "plan" {
-			return "next: record the selected model with kkt model and get explicit approval before edits"
+			return "next: record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model; then get explicit approval before edits"
 		}
 		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
@@ -256,6 +256,12 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 		if info.Size() == 0 && name != "events.jsonl" {
 			result.OK = false
 			result.Issues = append(result.Issues, fmt.Sprintf("empty %s", name))
+		}
+	}
+	if state.WorkspaceType == "plan" {
+		for _, issue := range planContractIssues(workspace) {
+			result.OK = false
+			result.Issues = append(result.Issues, issue)
 		}
 	}
 	evidence, err := os.ReadFile(filepath.Join(workspace, "evidence.md"))
@@ -304,6 +310,32 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 	return result, nil
 }
 
+func planContractIssues(workspace string) []string {
+	content, err := os.ReadFile(filepath.Join(workspace, "kkt.yaml"))
+	if err != nil {
+		return []string{err.Error()}
+	}
+	text := string(content)
+	var issues []string
+	for _, field := range requiredPlanContractFields() {
+		if !strings.Contains(text, field+":") {
+			issues = append(issues, "missing plan contract field "+field)
+		}
+	}
+	return issues
+}
+
+func requiredPlanContractFields() []string {
+	return []string{
+		"planning_contract",
+		"objective_function",
+		"files_to_modify",
+		"constraint_functions",
+		"decision_variables",
+		"validation_proof",
+	}
+}
+
 func stateYAML(request, profile string, now time.Time) string {
 	escapedRequest := strings.ReplaceAll(request, `"`, `\"`)
 	if profile == "plan" {
@@ -329,6 +361,24 @@ layers:
     method: lexicographic
     summary: ""
 decision_log: []
+planning_contract:
+  objective_function:
+    status: pending
+    summary: ""
+  files_to_modify:
+    status: pending
+    items: []
+  constraint_functions:
+    status: pending
+    hard: []
+    soft: []
+  decision_variables:
+    status: pending
+    items: []
+  validation_proof:
+    status: pending
+    commands: []
+    evidence: []
 artifact_refs:
   state: kkt.yaml
 approval:
@@ -483,7 +533,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	}
 	files["intent.md"] = intentMarkdown(request)
 	files["discovery.md"] = "# Discovery\n\nStatus: pending\n\nRecord repo facts, discovered constraints, validation paths, and remaining unknowns here.\n"
-	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord method selection, objective, known constraints, decision variables, candidate feasibility, selected plan, binding constraints, validation plan, execution implications, and residual risk here.\n"
+	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord method selection, objective function, known constraints, files to modify, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk here.\n"
 	if profile == "model" {
 		return files
 	}

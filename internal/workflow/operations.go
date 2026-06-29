@@ -175,6 +175,12 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 		_, writeErr := stdout.Write(fileContent)
 		return writeErr
 	}
+	if artifact == "model" {
+		missing := missingPlanModelFields(content)
+		if len(missing) > 0 {
+			return fmt.Errorf("plan model missing required fields: %s", strings.Join(missing, ", "))
+		}
+	}
 	if err := appendPlanStateEntry(workspace, artifact, content); err != nil {
 		return err
 	}
@@ -183,6 +189,20 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
 	return nil
+}
+
+func missingPlanModelFields(content string) []string {
+	text := strings.ToLower(content)
+	var missing []string
+	for _, field := range requiredPlanContractFields() {
+		if field == "planning_contract" {
+			continue
+		}
+		if !strings.Contains(text, field) {
+			missing = append(missing, field)
+		}
+	}
+	return missing
 }
 
 func runApprove(args []string, stdout io.Writer) error {

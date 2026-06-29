@@ -131,8 +131,8 @@ optimization_model:
   request_intake:
     User meaning plus discovered repo facts, discovered constraints, validation paths, and execution mode.
 
-  objective:
-    The outcome to optimize for.
+  objective_function:
+    The outcome to optimize for, plus the ordered terms used to compare feasible plans.
 
   system_state:
     facts:
@@ -143,11 +143,14 @@ optimization_model:
   decision_variables:
     The choices the agent is allowed to make. Each variable must include an allowed domain.
 
+  files_to_modify:
+    Expected files, modules, APIs, workflows, migrations, docs, or operational surfaces affected.
+
   constraint_contract:
     hard:
-      Must be satisfied for feasibility.
+      Constraint functions or predicates that must be satisfied for feasibility.
     soft:
-      Preferences used to compare feasible plans.
+      Constraint functions or preferences used to compare feasible plans.
 
   feasible_region:
     Candidate plans that satisfy all hard constraints.
@@ -176,8 +179,8 @@ Every selected model or approval-ready plan must explain the reasoning that shap
 
 ```yaml
 optimized_plan:
-  objective:
-    What outcome is being optimized for.
+  objective_function:
+    What outcome is being optimized for and the ordered terms used to compare feasible plans.
   known_constraints:
     explicit:
       Constraints stated by the user.
@@ -192,6 +195,21 @@ optimized_plan:
       allowed_domain:
       chosen_value:
       rationale:
+  files_to_modify:
+    - path_or_surface:
+      change_type:
+      rationale:
+  constraint_functions:
+    hard:
+      - name:
+        predicate:
+        source:
+        status:
+    soft:
+      - name:
+        preference:
+        source:
+        status:
   candidates:
     feasible:
       Plans that satisfy all hard constraints.
@@ -203,6 +221,8 @@ optimized_plan:
     Constraints that actively shaped the selected plan.
   validation_plan:
     Checks or evidence needed to prove the plan.
+  validation_proof:
+    Commands, checks, artifacts, or explicit limitations that will certify completion.
   execution_implications:
     Expected files, modules, APIs, workflows, migrations, or operational surfaces affected.
   residual_risk:
@@ -217,14 +237,17 @@ For implementation modes (`implement` and `loop`), show the final modeling resul
 
 The modeling result must include:
 
-- objective;
+- objective function;
 - known constraints;
+- files to modify;
+- constraint functions;
 - decision variables;
 - selected plan;
 - rejected alternatives or infeasible paths when relevant;
 - binding constraints;
 - expected files, modules, surfaces, or workflow areas to touch;
 - validation plan;
+- validation proof required;
 - residual risk.
 
 If the user changes the model, re-optimize before asking for approval again.

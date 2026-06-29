@@ -168,7 +168,7 @@ func TestPlanArtifactCommandsStayInStateFile(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "plan", "make", "the", "CLI", "durable"},
-		{"model", "Use compact state only"},
+		{"model", "objective_function: keep plan state compact; files_to_modify: workflow state only; constraint_functions: preserve lean kkt tier; decision_variables: typed inline contract; validation_proof: go test ./..."},
 		{"evidence", "validated by inspection"},
 	}
 	for _, command := range commands {
@@ -191,12 +191,51 @@ func TestPlanArtifactCommandsStayInStateFile(t *testing.T) {
 	if text := string(state); !strings.Contains(text, "artifact: \"model\"") || !strings.Contains(text, "artifact: \"evidence\"") {
 		t.Fatalf("plan artifacts were not recorded in kkt.yaml:\n%s", text)
 	}
+	for _, want := range []string{
+		"planning_contract:",
+		"objective_function:",
+		"files_to_modify:",
+		"constraint_functions:",
+		"decision_variables:",
+		"validation_proof:",
+	} {
+		if !strings.Contains(string(state), want) {
+			t.Fatalf("plan state missing %q:\n%s", want, state)
+		}
+	}
 	var stdout bytes.Buffer
 	if err := Run([]string{"show", "model"}, &stdout, &bytes.Buffer{}); err != nil {
 		t.Fatalf("show model failed for plan workspace: %v", err)
 	}
 	if !strings.Contains(stdout.String(), "decision_log:") {
 		t.Fatalf("show model did not return plan state:\n%s", stdout.String())
+	}
+}
+
+func TestPlanModelRequiresPlanningContractFields(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Run([]string{"start", "plan", "make", "planning", "explicit"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	err = Run([]string{"model", "selected plan only"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected incomplete plan model to fail")
+	}
+	if !strings.Contains(err.Error(), "objective_function") || !strings.Contains(err.Error(), "validation_proof") {
+		t.Fatalf("error did not list missing planning fields: %v", err)
 	}
 }
 

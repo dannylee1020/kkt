@@ -24,7 +24,7 @@ kkt status
 kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
-kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<selected model>"
+kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<objective_function, files_to_modify, constraint_functions, decision_variables, validation_proof, and selected model>"
 kkt plan "<execution contract>"
 kkt criteria add "<acceptance criterion>"
 kkt task add "<task>"
@@ -60,7 +60,7 @@ Loop workspaces use:
 4. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
 5. Inspect relevant repo context and validation paths before writing the model.
 6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
-7. Build the optimization model and execution contract from intent and discovery using the loop profile. The pre-approval output must include objective, known constraints, decision variables, candidate feasibility, selected plan, binding constraints, validation plan, execution implications, residual risk, acceptance criteria, evidence required, and stop conditions.
+7. Build the optimization model and execution contract from intent and discovery using the loop profile. The pre-approval output must include objective function, known constraints, files to modify or affected surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof plan, execution implications, residual risk, acceptance criteria, evidence required, and stop conditions.
 8. Show the final model and wait for explicit approval.
 9. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
 10. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.

@@ -148,7 +148,8 @@ kkt start plan|model|loop "<request>"
 kkt status
 kkt next [--json]
 kkt show [artifact]
-kkt intent|discovery|model --method <method>
+kkt intent|discovery --method <method> "<layer output>"
+kkt model --method <method> "<planning contract>"
 kkt plan|progress
 kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
 kkt notes
@@ -173,7 +174,7 @@ For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
 | `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
 
-All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
+All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. For plan-tier work, it carries a compact `planning_contract` with objective function, files to modify, constraint functions, decision variables, and validation proof. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
 
 ## Request Shape
 
@@ -188,6 +189,14 @@ explicit user constraints
 ```
 
 The user does not need to provide all of this upfront. Repo constraints, affected files, and validation paths are discovered from the codebase when possible and marked as assumptions when needed.
+
+Before edits, the selected model should name:
+
+- objective function
+- files or surfaces to modify
+- hard and soft constraint functions
+- decision variables with chosen values
+- validation proof required for completion
 
 Expected final audit:
 

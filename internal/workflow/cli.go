@@ -255,7 +255,7 @@ func firstArg(args []string) string {
 func startInstruction(profile string) string {
 	switch profile {
 	case "plan":
-		return "inspect relevant code/docs, record the selected model with kkt model, then request approval before edits"
+		return "inspect relevant code/docs, record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model, then request approval before edits"
 	case "model":
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
 	default:

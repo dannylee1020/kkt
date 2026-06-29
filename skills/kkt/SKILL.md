@@ -22,7 +22,7 @@ Use the `kkt` CLI whenever durable state is useful. The skill owns reasoning pol
 kkt start plan "<user request>"
 kkt status
 kkt next
-kkt model "<selected compact model>"
+kkt model "<objective_function, files_to_modify, constraint_functions, decision_variables, validation_proof, and selected compact model>"
 kkt approve "<approved scope>"
 kkt evidence "<validation evidence>"
 kkt validate
@@ -37,7 +37,7 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 2. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
 3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model.
 4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
-5. Build a compact model: objective, system state, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
+5. Build a compact model: objective function, system state, files to modify, constraint functions, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
 6. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.
 7. Reject infeasible plans, then choose the best feasible plan by this order: user request, correctness/security/data/public contracts, blast radius, existing architecture, maintainability, validation clarity.
 8. Show the final modeling result and wait for approval before editing.
@@ -47,7 +47,7 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 
 For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Switch to `$kkt-model` for deeper non-mutating modeling or `$kkt-loop` for long-running continuation.
 
-Before implementation, expose a compact optimized plan: objective, known constraints, decision variables, selected plan, rejected alternatives, binding constraints, expected files or surfaces, validation plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
+Before implementation, expose a compact optimized plan: objective function, known constraints, files to modify, constraint functions, decision variables, selected plan, rejected alternatives, binding constraints, validation proof plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 
 Final audit shape:
 
