@@ -76,6 +76,12 @@ type EvidenceOptions struct {
 	Content  string
 }
 
+type ArtifactOptions struct {
+	Method   string
+	Evidence EvidenceOptions
+	Content  string
+}
+
 func runShow(args []string, stdout io.Writer) error {
 	if len(args) > 1 {
 		return errors.New("show accepts at most one artifact")
@@ -116,22 +122,20 @@ func runArtifact(artifact string, args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	contentArgs := args
-	evidenceOptions := EvidenceOptions{}
-	if artifact == "evidence" {
-		var parseErr error
-		evidenceOptions, parseErr = parseEvidenceArgs(args)
-		if parseErr != nil {
-			return parseErr
-		}
-		contentArgs = []string{evidenceOptions.Content}
+	options, err := parseArtifactArgs(artifact, args)
+	if err != nil {
+		return err
+	}
+	contentArgs := []string{options.Content}
+	if options.Content == "" {
+		contentArgs = nil
 	}
 	content, err := commandContent(contentArgs)
 	if err != nil {
 		return err
 	}
 	if state.WorkspaceType == "plan" {
-		return runPlanArtifact(workspace, artifact, content, stdout)
+		return runPlanArtifact(workspace, artifact, content, options.Method, stdout)
 	}
 	path, err := artifactPath(workspace, artifact)
 	if err != nil {
@@ -152,16 +156,16 @@ func runArtifact(artifact string, args []string, stdout io.Writer) error {
 		return err
 	}
 	if artifact == "evidence" {
-		evidenceOptions.Content = content
+		options.Evidence.Content = content
 	}
-	if err := updateStateForArtifact(workspace, artifact, content, evidenceOptions); err != nil {
+	if err := updateStateForArtifact(workspace, artifact, content, options.Method, options.Evidence); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
 	return nil
 }
 
-func runPlanArtifact(workspace, artifact, content string, stdout io.Writer) error {
+func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writer) error {
 	path := filepath.Join(workspace, "kkt.yaml")
 	if strings.TrimSpace(content) == "" {
 		fileContent, err := os.ReadFile(path)
@@ -174,7 +178,7 @@ func runPlanArtifact(workspace, artifact, content string, stdout io.Writer) erro
 	if err := appendPlanStateEntry(workspace, artifact, content); err != nil {
 		return err
 	}
-	if err := updateStateForArtifact(workspace, artifact, content, EvidenceOptions{}); err != nil {
+	if err := updateStateForArtifact(workspace, artifact, content, method, EvidenceOptions{}); err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
@@ -469,34 +473,76 @@ func commandContent(args []string) (string, error) {
 	return strings.Join(args, " "), nil
 }
 
-func parseEvidenceArgs(args []string) (EvidenceOptions, error) {
-	options := EvidenceOptions{}
+func parseArtifactArgs(artifact string, args []string) (ArtifactOptions, error) {
+	options := ArtifactOptions{}
 	content := []string{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch arg {
+		case "--method":
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return ArtifactOptions{}, fmt.Errorf("%s --method requires a method", artifact)
+			}
+			if !artifactAcceptsMethod(artifact) {
+				return ArtifactOptions{}, fmt.Errorf("%s does not accept flag: --method", artifact)
+			}
+			method := strings.TrimSpace(args[i])
+			if !validLayerMethod(artifact, method) {
+				return ArtifactOptions{}, fmt.Errorf("unsupported %s method: %s", artifact, method)
+			}
+			options.Method = method
 		case "--for":
+			if artifact != "evidence" {
+				return ArtifactOptions{}, fmt.Errorf("%s does not accept flag: --for", artifact)
+			}
 			i++
 			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
-				return EvidenceOptions{}, errors.New("evidence --for requires a criterion id")
+				return ArtifactOptions{}, errors.New("evidence --for requires a criterion id")
 			}
-			options.Criteria = append(options.Criteria, splitCSV(args[i])...)
+			options.Evidence.Criteria = append(options.Evidence.Criteria, splitCSV(args[i])...)
 		case "--command":
+			if artifact != "evidence" {
+				return ArtifactOptions{}, fmt.Errorf("%s does not accept flag: --command", artifact)
+			}
 			i++
 			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
-				return EvidenceOptions{}, errors.New("evidence --command requires a command")
+				return ArtifactOptions{}, errors.New("evidence --command requires a command")
 			}
-			options.Command = strings.TrimSpace(args[i])
+			options.Evidence.Command = strings.TrimSpace(args[i])
 		default:
 			if strings.HasPrefix(arg, "-") {
-				return EvidenceOptions{}, fmt.Errorf("evidence does not accept flag: %s", arg)
+				return ArtifactOptions{}, fmt.Errorf("%s does not accept flag: %s", artifact, arg)
 			}
 			content = append(content, arg)
 		}
 	}
-	options.Criteria = uniqueStrings(options.Criteria)
+	options.Evidence.Criteria = uniqueStrings(options.Evidence.Criteria)
 	options.Content = strings.TrimSpace(strings.Join(content, " "))
 	return options, nil
+}
+
+func artifactAcceptsMethod(artifact string) bool {
+	switch artifact {
+	case "intent", "discovery", "model":
+		return true
+	default:
+		return false
+	}
+}
+
+func validLayerMethod(artifact, method string) bool {
+	allowed := map[string][]string{
+		"intent":    {"goal_anti_goal", "why_how", "obstacle_questions", "pairwise_questions"},
+		"discovery": {"naive", "traceability_matrix", "coupling_map", "dsm_lite"},
+		"model":     {"lexicographic", "decision_tree", "shortest_path", "ordinal_mcda", "pairwise_ahp", "outranking"},
+	}
+	for _, candidate := range allowed[artifact] {
+		if method == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func artifactPath(workspace, artifact string) (string, error) {
@@ -541,7 +587,7 @@ func appendArtifact(path, artifact, content string) error {
 }
 
 func markArtifactRecorded(path, artifact string) error {
-	if artifact != "evidence" && artifact != "progress" {
+	if artifact == "notes" {
 		return nil
 	}
 	content, err := os.ReadFile(path)
@@ -555,7 +601,11 @@ func markArtifactRecorded(path, artifact string) error {
 	return os.WriteFile(path, []byte(next), 0o644)
 }
 
-func updateStateForArtifact(workspace, artifact, content string, evidenceOptions EvidenceOptions) error {
+func updateStateForArtifact(workspace, artifact, content, method string, evidenceOptions EvidenceOptions) error {
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
 	layerForArtifact := map[string]string{
 		"intent":    "intent",
 		"discovery": "discovery",
@@ -564,7 +614,15 @@ func updateStateForArtifact(workspace, artifact, content string, evidenceOptions
 		"evidence":  "validation",
 	}
 	if layer, ok := layerForArtifact[artifact]; ok {
-		if err := updateTopLevelState(workspace, "active_layer", layer); err != nil {
+		if err := updateLayerState(workspace, layer, "complete", method, firstLine(content)); err != nil {
+			return err
+		}
+		if method != "" {
+			if err := appendMethodInvocation(workspace, layer, method, content); err != nil {
+				return err
+			}
+		}
+		if err := updateTopLevelState(workspace, "active_layer", nextActiveLayer(state, artifact)); err != nil {
 			return err
 		}
 	}
@@ -588,6 +646,9 @@ func updateStateForArtifact(workspace, artifact, content string, evidenceOptions
 		}
 	}
 	data := map[string]any{"summary": firstLine(content)}
+	if method != "" {
+		data["method"] = method
+	}
 	if artifact == "evidence" {
 		if len(evidenceOptions.Criteria) > 0 {
 			data["criteria"] = evidenceOptions.Criteria
@@ -597,6 +658,157 @@ func updateStateForArtifact(workspace, artifact, content string, evidenceOptions
 		}
 	}
 	return appendEvent(workspace, artifact+"_recorded", data)
+}
+
+func nextActiveLayer(state State, artifact string) string {
+	switch artifact {
+	case "intent":
+		return "discovery"
+	case "discovery":
+		return "modeling"
+	case "model":
+		if state.WorkspaceType == "model" {
+			return "validation"
+		}
+		if state.WorkspaceType == "loop" {
+			return "execution"
+		}
+		return "modeling"
+	case "plan":
+		return "execution"
+	case "evidence":
+		return "validation"
+	default:
+		return state.ActiveLayer
+	}
+}
+
+func updateLayerState(workspace, layer, status, method, summary string) error {
+	path := filepath.Join(workspace, "kkt.yaml")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(content), "\n")
+	layerLine := "  " + layer + ":"
+	start := -1
+	end := len(lines)
+	for i, line := range lines {
+		if line == layerLine {
+			start = i
+			continue
+		}
+		if start >= 0 && i > start {
+			if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+				end = i
+				break
+			}
+			if line != "" && !strings.HasPrefix(line, " ") {
+				end = i
+				break
+			}
+		}
+	}
+	if start < 0 {
+		return nil
+	}
+	if summary == "" {
+		summary = "Recorded " + layer + "."
+	}
+	fields := map[string]string{
+		"status":  status,
+		"summary": summary,
+	}
+	if method != "" {
+		fields["method"] = method
+	}
+	seen := map[string]bool{}
+	for i := start + 1; i < end; i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		key, _, ok := strings.Cut(trimmed, ":")
+		if !ok {
+			continue
+		}
+		value, exists := fields[key]
+		if !exists {
+			continue
+		}
+		lines[i] = "    " + key + ": " + quoteYAML(value)
+		seen[key] = true
+	}
+	insert := []string{}
+	for _, key := range []string{"status", "method", "summary"} {
+		value, exists := fields[key]
+		if !exists || seen[key] {
+			continue
+		}
+		insert = append(insert, "    "+key+": "+quoteYAML(value))
+	}
+	if len(insert) > 0 {
+		next := append([]string{}, lines[:end]...)
+		next = append(next, insert...)
+		next = append(next, lines[end:]...)
+		lines = next
+	}
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func appendMethodInvocation(workspace, layer, method, content string) error {
+	path := filepath.Join(workspace, "kkt.yaml")
+	fileContent, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	summary := firstLine(content)
+	if summary == "" {
+		summary = "Recorded " + layer + "."
+	}
+	entry := []string{
+		"  - layer: " + quoteYAML(layer),
+		"    method: " + quoteYAML(method),
+		"    reason: " + quoteYAML(summary),
+		"    inputs: " + quoteYAML("current workspace state"),
+		"    outputs: " + quoteYAML(layerArtifact(layer)),
+	}
+	lines := strings.Split(string(fileContent), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "method_invocations: []" {
+			next := append([]string{}, lines[:i]...)
+			next = append(next, "method_invocations:")
+			next = append(next, entry...)
+			next = append(next, lines[i+1:]...)
+			return os.WriteFile(path, []byte(strings.Join(next, "\n")), 0o644)
+		}
+		if strings.TrimSpace(line) == "method_invocations:" {
+			end := len(lines)
+			for j := i + 1; j < len(lines); j++ {
+				if lines[j] != "" && !strings.HasPrefix(lines[j], " ") {
+					end = j
+					break
+				}
+			}
+			next := append([]string{}, lines[:end]...)
+			next = append(next, entry...)
+			next = append(next, lines[end:]...)
+			return os.WriteFile(path, []byte(strings.Join(next, "\n")), 0o644)
+		}
+	}
+	lines = append(lines, "method_invocations:")
+	lines = append(lines, entry...)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func layerArtifact(layer string) string {
+	switch layer {
+	case "modeling":
+		return "model.md"
+	case "execution":
+		return "plan.md"
+	case "validation":
+		return "evidence.md"
+	default:
+		return layer + ".md"
+	}
 }
 
 func updateTopLevelState(workspace, key, value string) error {
@@ -1178,6 +1390,10 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 			instruction := "next: resolve active stop condition: " + stop.Text
 			return NextAction{SchemaVersion: 1, Action: "resolve_stop_condition", Reason: "stop condition is active", StopCondition: stop.Text, Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: instruction}
 		}
+	}
+	if state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
+		instruction := "next: show the selected model and record approval with kkt approve before execution"
+		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
 	}
 	if loop.CurrentTask == "" && len(loop.Tasks) == 0 && len(loop.AcceptanceCriteria) == 0 {
 		return continueLayerAction(state)

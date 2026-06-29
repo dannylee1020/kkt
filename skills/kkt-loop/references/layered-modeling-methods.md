@@ -25,7 +25,7 @@ Use for `$kkt-model` and complex planning.
 
 - Use a goal / anti-goal frame, WHY / HOW ladder, and obstacle questions to clarify user meaning.
 - Build a discovery map with traceability, coupling, blast radius, and evidence confidence.
-- Select a modeling method based on the decision shape.
+- Select and record one intent method, one discovery method, and one modeling method based on the decision shape.
 - Compare candidate models, reject infeasible options, and explain binding constraints.
 - End with a selected model, a decision brief, or the smallest unresolved user decisions.
 
@@ -57,6 +57,7 @@ layer_contract:
 ```
 
 - `method_used` must name the actual method chosen, not a generic profile.
+- For `$kkt-model` and `$kkt-loop`, record chosen intent/discovery/modeling methods with `kkt intent --method`, `kkt discovery --method`, and `kkt model --method`.
 - `inputs_consumed` must point to prior layer artifacts or summarize session-only input.
 - `decisions` must include enough rationale for a different agent to continue.
 - `unknowns` must distinguish harmless uncertainty from blocking ambiguity.

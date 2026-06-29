@@ -18,7 +18,9 @@ Usage:
   kkt status [path]
   kkt next [--json] [path]
   kkt show [artifact]
-  kkt intent|discovery|model|plan|progress|evidence [--for criterion] [--command command] [content]
+  kkt intent|discovery|model [--method method] [content]
+  kkt plan|progress [content]
+  kkt evidence [--for criterion] [--command command] [content]
   kkt notes [content]
   kkt approve [scope]
   kkt criteria [add|satisfy|block] [criterion]
@@ -255,8 +257,8 @@ func startInstruction(profile string) string {
 	case "plan":
 		return "inspect relevant code/docs, record the selected model with kkt model, then request approval before edits"
 	case "model":
-		return "inspect relevant code/docs, record discovery with kkt discovery, then record the selected model with kkt model"
+		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
 	default:
-		return "inspect relevant code/docs, record discovery/model/plan with kkt commands, then request approval before execution"
+		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery/model/plan"
 	}
 }

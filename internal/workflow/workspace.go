@@ -212,20 +212,26 @@ func ReadState(workspace string) (State, error) {
 func NextInstruction(state State) string {
 	switch state.ActiveLayer {
 	case "intent":
-		return "next: record intent with kkt intent, then inspect the repo and record discovery with kkt discovery"
+		return "next: record adaptive intent with kkt intent --method <method>, then inspect the repo and record discovery with kkt discovery --method <method>"
 	case "discovery":
 		if state.WorkspaceType == "plan" {
 			return "next: inspect the repo, then record the selected model with kkt model before edits"
 		}
-		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery"
+		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery --method <method>"
 	case "modeling":
 		if state.WorkspaceType == "plan" {
 			return "next: record the selected model with kkt model and get explicit approval before edits"
 		}
-		return "next: record the selected model with kkt model, show it, and get explicit approval before edits"
+		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
+		if state.WorkspaceType == "loop" && state.ApprovalStatus != "approved" {
+			return "next: show the selected model and record approval with kkt approve before execution"
+		}
 		return "next: execute only the approved plan and record progress with kkt progress"
 	case "validation":
+		if state.WorkspaceType == "model" {
+			return "next: run kkt validate, then finish the decision brief with kkt done"
+		}
 		return "next: run validation, record evidence with kkt evidence, then finish with kkt done"
 	default:
 		return "next: inspect kkt.yaml and continue from the active layer"
@@ -341,25 +347,26 @@ workflow_type: kkt
 workspace_type: model
 profile: model
 status: modeling
-active_layer: discovery
+active_layer: intent
 created_at: %s
 request: "%s"
 layers:
   intent:
-    status: complete
-    method: goal_anti_goal
-    summary: "Initial user request captured by kkt start model."
+    status: pending
+    method: pending
+    summary: ""
     artifact: intent.md
   discovery:
     status: pending
-    method: traceability_matrix
+    method: pending
     summary: ""
     artifact: discovery.md
   modeling:
     status: pending
-    method: lexicographic
+    method: pending
     summary: ""
     artifact: model.md
+method_invocations: []
 decision_log: []
 artifact_refs:
   intent: intent.md
@@ -379,41 +386,36 @@ workflow_type: kkt
 workspace_type: loop
 profile: loop
 status: modeling
-active_layer: discovery
+active_layer: intent
 created_at: %s
 request: "%s"
 layers:
   intent:
-    status: complete
-    method: goal_anti_goal
-    summary: "Initial user request captured by kkt start loop."
+    status: pending
+    method: pending
+    summary: ""
     artifact: intent.md
   discovery:
     status: pending
-    method: traceability_matrix
+    method: pending
     summary: ""
     artifact: discovery.md
   modeling:
     status: pending
-    method: lexicographic
+    method: pending
     summary: ""
     artifact: model.md
   execution:
     status: pending
-    method: contract_preserving_change
+    method: pending
     summary: ""
     artifact: plan.md
   validation:
     status: pending
-    method: hard_constraint_audit
+    method: pending
     summary: ""
     artifact: evidence.md
-method_invocations:
-  - layer: intent
-    method: goal_anti_goal
-    reason: "Capture rough request before discovery."
-    inputs: "user request"
-    outputs: intent.md
+method_invocations: []
 decision_log: []
 artifact_refs:
   intent: intent.md
@@ -507,7 +509,7 @@ func requiredFiles(workspaceType string) []string {
 func intentMarkdown(request string) string {
 	return fmt.Sprintf(`# Intent
 
-Status: complete
+Status: pending
 
 ## User Goal
 

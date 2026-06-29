@@ -22,9 +22,9 @@ Use the `kkt` CLI as the workflow control path. The skill owns reasoning policy;
 kkt start loop "<user request>"
 kkt status
 kkt next
-kkt intent "<intent frame>"
-kkt discovery "<repo facts and constraints>"
-kkt model "<selected model>"
+kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
+kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
+kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<selected model>"
 kkt plan "<execution contract>"
 kkt criteria add "<acceptance criterion>"
 kkt task add "<task>"
@@ -56,15 +56,17 @@ Loop workspaces use:
 
 1. Check current goal state with `get_goal` if available; do not create a second active goal without explicit user direction.
 2. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
-3. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
-4. Inspect relevant repo context and validation paths before writing the model.
-5. Build the optimization model and execution contract from intent and discovery using the loop profile.
-6. Show the final model and wait for explicit approval.
-7. After approval, create durable state with `kkt start loop`, record intent/discovery/model/plan with CLI commands, add criteria/tasks, and record approval.
-8. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-9. Before each work segment, run `kkt status` and `kkt next`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
-10. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
-11. Re-optimize with `kkt model` only when new evidence changes feasibility, constraints, or objective fit.
+3. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass.
+4. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
+5. Inspect relevant repo context and validation paths before writing the model.
+6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. If the basic method is enough, say why instead of silently defaulting.
+7. Build the optimization model and execution contract from intent and discovery using the loop profile.
+8. Show the final model and wait for explicit approval.
+9. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
+10. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
+11. Before each work segment, run `kkt status` and `kkt next`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
+12. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
+13. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
 
 ## Goal Objective Template
 

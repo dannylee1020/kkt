@@ -148,8 +148,10 @@ kkt start plan|model|loop "<request>"
 kkt status
 kkt next [--json]
 kkt show [artifact]
-kkt intent|discovery|model|plan|progress|evidence|notes
+kkt intent|discovery|model --method <method>
+kkt plan|progress
 kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
+kkt notes
 kkt criteria add|satisfy|block
 kkt task add|start|done|skip|block
 kkt approve

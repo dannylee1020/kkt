@@ -56,6 +56,13 @@ func TestStartWorkflowCreatesModelWorkspace(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(workspace.Path, "plan.md")); !os.IsNotExist(err) {
 		t.Fatalf("plan.md should not exist for model workspace: %v", err)
 	}
+	state, err := os.ReadFile(filepath.Join(workspace.Path, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(state); !strings.Contains(text, "active_layer: intent") || !strings.Contains(text, "method: pending") {
+		t.Fatalf("model workspace should start with pending intent:\n%s", text)
+	}
 }
 
 func TestStartWorkflowCreatesLoopWorkspace(t *testing.T) {
@@ -79,6 +86,9 @@ func TestStartWorkflowCreatesLoopWorkspace(t *testing.T) {
 	}
 	if text := string(state); !strings.Contains(text, "loop_state:") || !strings.Contains(text, "acceptance_criteria:") {
 		t.Fatalf("loop state block missing from kkt.yaml:\n%s", text)
+	}
+	if text := string(state); !strings.Contains(text, "active_layer: intent") || !strings.Contains(text, "method_invocations: []") {
+		t.Fatalf("loop workspace should start with pending method selection:\n%s", text)
 	}
 }
 

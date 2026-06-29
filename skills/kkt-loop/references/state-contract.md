@@ -20,6 +20,7 @@ Use the `kkt` CLI for deterministic state scaffolding and validation:
 kkt start plan "<request>"
 kkt start model "<request>"
 kkt start loop "<request>"
+kkt intent|discovery|model --method <method> "<layer output>"
 kkt validate
 ```
 
@@ -48,27 +49,27 @@ active_layer: intent | discovery | modeling | execution | validation
 layers:
   intent:
     status: pending | complete | blocked
-    method: goal_anti_goal | why_how | obstacle_questions | pairwise_questions
+    method: pending | goal_anti_goal | why_how | obstacle_questions | pairwise_questions
     summary: ""
     artifact: intent.md
   discovery:
     status: pending | complete | blocked
-    method: naive | traceability_matrix | coupling_map | dsm_lite
+    method: pending | naive | traceability_matrix | coupling_map | dsm_lite
     summary: ""
     artifact: discovery.md
   modeling:
     status: pending | complete | blocked
-    method: lexicographic | decision_tree | shortest_path | ordinal_mcda | pairwise_ahp | outranking
+    method: pending | lexicographic | decision_tree | shortest_path | ordinal_mcda | pairwise_ahp | outranking
     summary: ""
     artifact: model.md
   execution:
     status: pending | complete | blocked
-    method: smallest_feasible_step | contract_preserving_change
+    method: pending | smallest_feasible_step | contract_preserving_change
     summary: ""
     artifact: plan.md
   validation:
     status: pending | complete | blocked
-    method: acceptance_map | hard_constraint_audit | binding_constraint_audit
+    method: pending | acceptance_map | hard_constraint_audit | binding_constraint_audit
     summary: ""
     artifact: evidence.md
 method_invocations:

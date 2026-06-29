@@ -34,6 +34,7 @@ func TestRunRejectsRemovedAliasesAndFlags(t *testing.T) {
 		{"init", "codex"},
 		{"uninstall", "--dry-run"},
 		{"uninstall", "--keep-binary"},
+		{"intent", "--method"},
 	}
 
 	for _, test := range tests {
@@ -42,6 +43,90 @@ func TestRunRejectsRemovedAliasesAndFlags(t *testing.T) {
 				t.Fatal("expected removed alias or flag to be rejected")
 			}
 		})
+	}
+}
+
+func TestRunArtifactRecordsLayerMethodAndAdvances(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "model", "choose", "API", "shape"},
+		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
+		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
+		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := os.ReadFile(filepath.Join(workspace, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(state)
+	for _, want := range []string{
+		`active_layer: "validation"`,
+		`method: "why_how"`,
+		`method: "coupling_map"`,
+		`method: "ordinal_mcda"`,
+		"method_invocations:",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("state missing %q:\n%s", want, text)
+		}
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := next.String(); !strings.Contains(text, "run kkt validate") || strings.Contains(text, "kkt evidence") {
+		t.Fatalf("model-only next should validate without evidence guidance:\n%s", text)
+	}
+}
+
+func TestRunArtifactRejectsInvalidLayerMethod(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "model", "choose", "API", "shape"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+
+	err = Run([]string{"model", "--method", "goal_anti_goal", "wrong layer method"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected invalid model method to fail")
+	}
+	if !strings.Contains(err.Error(), "unsupported model method") {
+		t.Fatalf("error = %q, want unsupported model method", err.Error())
 	}
 }
 
@@ -235,7 +320,7 @@ func TestRunNextForFreshLoopUsesActiveLayer(t *testing.T) {
 	if err := Run([]string{"next"}, &textNext, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if text := textNext.String(); !strings.Contains(text, "record discovery") || strings.Contains(text, "validate, then kkt done") {
+	if text := textNext.String(); !strings.Contains(text, "record adaptive intent") || strings.Contains(text, "validate, then kkt done") {
 		t.Fatalf("fresh loop next should use active layer guidance:\n%s", text)
 	}
 
@@ -243,8 +328,45 @@ func TestRunNextForFreshLoopUsesActiveLayer(t *testing.T) {
 	if err := Run([]string{"next", "--json"}, &jsonNext, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if text := jsonNext.String(); !strings.Contains(text, `"action": "continue_layer"`) || !strings.Contains(text, `"reason": "active layer is discovery"`) {
+	if text := jsonNext.String(); !strings.Contains(text, `"action": "continue_layer"`) || !strings.Contains(text, `"reason": "active layer is intent"`) {
 		t.Fatalf("fresh loop next --json should continue the active layer:\n%s", text)
+	}
+}
+
+func TestRunNextRequiresApprovalAfterLoopModel(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "approval", "after", "model"},
+		{"intent", "--method", "goal_anti_goal", "Captured goal and anti-goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped implementation surfaces"},
+		{"model", "--method", "lexicographic", "Selected feasible plan"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	text := next.String()
+	if !strings.Contains(text, `"action": "request_approval"`) || !strings.Contains(text, `"blocked": true`) {
+		t.Fatalf("loop after model should request approval:\n%s", text)
 	}
 }
 

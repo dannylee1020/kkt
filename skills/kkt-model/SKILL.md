@@ -22,9 +22,9 @@ Use the `kkt` CLI whenever durable model state is useful. The skill owns modelin
 kkt start model "<user request>"
 kkt status
 kkt next
-kkt intent "<intent frame>"
-kkt discovery "<repo facts and constraints>"
-kkt model "<selected model and tradeoffs>"
+kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
+kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
+kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<selected model and tradeoffs>"
 kkt validate
 kkt done
 ```
@@ -34,15 +34,16 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 ## Workflow
 
 1. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
-2. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs before choosing a model.
-3. Separate explicit requirements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
-4. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
-5. Select the modeling method from the layered catalog and state why it fits.
-6. Build the shared optimization model from intent and discovery: objective, system state, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
-7. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
-8. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
-9. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
-10. Record durable output with `kkt intent`, `kkt discovery`, `kkt model`, and `kkt validate` when a workspace exists.
+2. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass using WHY/HOW, obstacle, example/counterexample, or pairwise tradeoff prompts.
+3. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs before choosing a model.
+4. Separate explicit requirements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
+5. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
+6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. If the basic method is enough, say why instead of silently defaulting.
+7. Build the shared optimization model from intent and discovery: objective, system state, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
+8. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
+9. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
+10. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
+11. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, and `kkt validate` when a workspace exists.
 
 ## End States
 

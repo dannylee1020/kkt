@@ -107,8 +107,8 @@ Use mathematical modeling semantics:
 Choose the smallest modeling profile that fits the skill and request:
 
 - Plan profile (`kkt`): use compact intake, discovery facts, hard-constraint feasibility, lexicographic ranking, approval before implementation, and validation certificate. Keep formal method names mostly hidden unless they explain a material tradeoff.
-- Deep profile (`kkt-model`): use the layered method catalog for intent capture, discovery, coupling, method selection, candidate comparison, and user tradeoff decisions.
-- Loop profile (`kkt-loop`): front-load deeper planning, show the final model for approval, then create durable workspace files and execute with evidence-backed continuation.
+- Deep profile (`kkt-model`): use the layered method catalog for intent capture, discovery, coupling, method selection, candidate comparison, and user tradeoff decisions; record the selected intent, discovery, and modeling methods with `kkt ... --method`.
+- Loop profile (`kkt-loop`): front-load deeper planning, record selected intent/discovery/modeling methods with `kkt ... --method`, show the final model for approval, then execute with evidence-backed continuation.
 
 Use `references/layered-modeling-methods.md` when the request needs method selection beyond the plan profile.
 
