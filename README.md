@@ -173,7 +173,7 @@ For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
 | `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
 
-All durable state lives under the project root's `.kkt/`; the CLI uses the nearest Git/worktree root and falls back to the current directory outside Git. `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
+All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
 
 ## Request Shape
 
