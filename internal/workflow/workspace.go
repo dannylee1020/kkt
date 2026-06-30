@@ -271,6 +271,10 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 				result.Issues = append(result.Issues, issue)
 			}
 		}
+		for _, issue := range validationCommandProofIssues(workspace) {
+			result.OK = false
+			result.Issues = append(result.Issues, issue)
+		}
 	}
 	evidence, err := os.ReadFile(filepath.Join(workspace, "evidence.md"))
 	if state.WorkspaceType == "run" && err == nil && strings.Contains(string(evidence), "Status: pending") {

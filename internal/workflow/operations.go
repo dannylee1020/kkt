@@ -956,6 +956,10 @@ func appendEvent(workspace, eventType string, data map[string]any) error {
 	if state.WorkspaceType != "loop" {
 		return nil
 	}
+	return appendWorkspaceEvent(workspace, state, eventType, data)
+}
+
+func appendWorkspaceEvent(workspace string, state State, eventType string, data map[string]any) error {
 	entry := EventEntry{
 		SchemaVersion:   1,
 		Time:            time.Now().UTC().Format(time.RFC3339),
@@ -982,13 +986,17 @@ func appendEvent(workspace, eventType string, data map[string]any) error {
 }
 
 func appendValidationEvent(workspace string, result ValidationResult) error {
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
 	eventType := "validation_passed"
 	data := map[string]any{"ok": result.OK}
 	if !result.OK {
 		eventType = "validation_failed"
 		data["issues"] = result.Issues
 	}
-	return appendEvent(workspace, eventType, data)
+	return appendWorkspaceEvent(workspace, state, eventType, data)
 }
 
 func readEvents(workspace string, limit int) ([]EventEntry, error) {

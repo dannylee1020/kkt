@@ -807,7 +807,186 @@ func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
 	}
 }
 
+func TestValidateReportsMissingRequiredCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationModelWorkspace(t, []string{"printf ok"})
+
+	var stdout bytes.Buffer
+	err = Run([]string{"validate"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("validate should fail when a required command has no proof")
+	}
+	if text := stdout.String(); !strings.Contains(text, "required command not run: printf ok") {
+		t.Fatalf("validate output missing command proof issue:\n%s", text)
+	}
+}
+
+func TestValidateRunRecordsRequiredCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	workspace := startValidationModelWorkspace(t, []string{"printf ok"})
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("validate --run error = %v\n%s", err, stdout.String())
+	}
+	if text := stdout.String(); !strings.Contains(text, "passed: printf ok") || !strings.Contains(text, "valid:") {
+		t.Fatalf("validate --run output missing pass and valid status:\n%s", text)
+	}
+	events, err := readEvents(workspace, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawCommandProof bool
+	for _, event := range events {
+		if event.Type == "validation_command_passed" && event.Data["command"] == "printf ok" {
+			sawCommandProof = true
+		}
+	}
+	if !sawCommandProof {
+		t.Fatalf("events missing validation_command_passed proof: %#v", events)
+	}
+}
+
+func TestValidateRunFailsWhenRequiredCommandFails(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationModelWorkspace(t, []string{"false"})
+
+	var stdout bytes.Buffer
+	err = Run([]string{"validate", "--run", "--timeout", "5s"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("validate --run should fail when a required command fails")
+	}
+	if text := stdout.String(); !strings.Contains(text, "failed: false") || !strings.Contains(text, "log:") {
+		t.Fatalf("validate --run output missing failure details:\n%s", text)
+	}
+}
+
+func TestValidateReportsStaleRequiredCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationModelWorkspace(t, []string{"true"})
+
+	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "changed.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	err = Run([]string{"validate"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("validate should fail when command proof is stale")
+	}
+	if text := stdout.String(); !strings.Contains(text, "required command proof is stale: true") {
+		t.Fatalf("validate output missing stale proof issue:\n%s", text)
+	}
+}
+
+func TestJudgeFinalizeBlocksMissingRequiredCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationModelWorkspace(t, []string{"printf ok"})
+
+	var stdout bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "finalize", "--json"}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("finalize judge should block when required command proof is missing")
+	}
+	if text := stdout.String(); !strings.Contains(text, `"verdict": "block"`) || !strings.Contains(text, "required command not run: printf ok") {
+		t.Fatalf("judge output missing validation proof issue:\n%s", text)
+	}
+}
+
+func startValidationModelWorkspace(t *testing.T, requiredCommands []string) string {
+	t.Helper()
+	commands := [][]string{
+		{"start", "model", "choose", "API", "shape"},
+		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
+		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
+		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"guardrails", "set", testGuardrailsJSONWithCommands("model", []string{"**"}, nil, requiredCommands)},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
 func testGuardrailsJSON(executionMode string, allowedPaths, blockedPaths []string) string {
+	return testGuardrailsJSONWithCommands(executionMode, allowedPaths, blockedPaths, nil)
+}
+
+func testGuardrailsJSONWithCommands(executionMode string, allowedPaths, blockedPaths, requiredCommands []string) string {
 	payload := map[string]any{
 		"schema_version": 1,
 		"source": map[string]any{
@@ -836,7 +1015,7 @@ func testGuardrailsJSON(executionMode string, allowedPaths, blockedPaths []strin
 		},
 		"validation": map[string]any{
 			"acceptance_criteria": []string{"test scope is enforced"},
-			"required_commands":   []string{"go test ./..."},
+			"required_commands":   requiredCommands,
 			"evidence_required":   []string{"scope audit confirms only allowed paths changed"},
 		},
 		"drift_policy": map[string]any{

@@ -15,26 +15,11 @@
 
 kkt applies [constrained optimization](https://en.wikipedia.org/wiki/Constrained_optimization) to coding-agent workflows. Named after the [Karush-Kuhn-Tucker conditions](https://en.wikipedia.org/wiki/Karush%E2%80%93Kuhn%E2%80%93Tucker_conditions), it translates mathematical modeling discipline into a practical framework for identifying application constraints, choosing feasible implementation paths, and validating the result.
 
-## How It Works
+## Why KKT
 
-```text
-Without KKT:
+Most coding-agent workflows turn a request into a plan. That helps, but it carries risk: the plan focuses on what to change, not what must stay unchanged.
 
-request --> agent --> plan --> edits --> validation --> finish
-
-
-With KKT:
-
-request --> agent --> KKT modeling --> edits --> validation --> finish
-                           |
-                           v
-        constraints --> optimization --> verification
-```
-
-## Why kkt
-Good implementation plans are shaped as much by what not to do as by what to do.
-
-kkt makes those limits explicit. Before choosing an implementation path, it pushes the agent to identify the constraints that define a safe change: public contracts that must not break, architecture boundaries that must not be crossed, data rules that must not be weakened, and validation that must not be skipped.
+kkt shifts the frame from planning to modeling, so the solution is built around the constraints already present in the codebase. It treats implementation as a constrained optimization problem: define the objective, mark the boundaries that cannot move, compare the viable paths, and name the proof that will make the result credible.
 
 Instead of:
 
@@ -42,23 +27,58 @@ Instead of:
 build xyz
 ```
 
-model the work as:
+kkt pushes the agent toward:
 
 ```text
-what is the optimized implementation,
+what is the best feasible implementation,
 given what must stay true?
 ```
 
-The result is a more disciplined implementation plan: fewer accidental side effects, clearer tradeoffs, smaller edits, and validation tied to the actual constraints of the work.
+For coding agents, "what must stay true" is usually concrete:
 
-For coding agents, those constraints are usually concrete:
-
-- existing architecture and public contracts
+- public contracts and API behavior
+- architecture boundaries
 - files, modules, endpoints, schemas, and migrations
 - security, privacy, and data-integrity rules
-- ui and product boundaries
+- UI and product boundaries
 - infrastructure and runtime limits
-- validation evidence required to prove completion
+- validation evidence required before completion
+
+he value is forcing feasibility before optimization: reject plans that violate hard constraints, compare the remaining plans, choose the best feasible path, then validate against the model.
+
+## How It Works
+
+```text
+Without KKT:
+
+request --> agent --> plan --> edits --> validation
+
+
+With KKT:
+
+request --> agent --> (model constraints --> select optimized path) --> edits --> validation
+                                      |
+                                      v
+                    objective + decision variables + proof required
+```
+
+## KKT vs Plan Mode
+
+Plan mode is useful for discussion and high-level sequencing. It usually answers: "What should we do?"
+
+kkt is stricter. It answers: "Which implementation is optimal inside these constraints?"
+
+| plan mode | kkt |
+| --- | --- |
+| conversational plan for the current task | constrained model for the implementation |
+| may describe steps without formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
+| often lives in the chat context | can persist workflow state under project-root `.kkt/` when useful |
+| validates after implementation | defines validation proof before implementation |
+| good for lightweight coordination | useful when correctness depends on preserving boundaries |
+
+Use normal plan mode when the task is small and low-risk. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
+
+## The Model
 
 The core idea:
 
@@ -86,25 +106,24 @@ where:
 - the selected plan is the best feasible plan, not the first plausible plan
 - validation is the certificate that the selected plan satisfies the model
 
-## Interface
-
-KKT is skill-first. Invoke `$kkt`, `$kkt-model`, `$kkt-run`, or `$kkt-loop` from your coding agent. The CLI is the tool those skills rely on for `.kkt/` scaffolding, status, guardrails, state persistence and validation,
-
-| piece | what it offers | use when |
-| --- | --- | --- |
-| Skills | Primary KKT workflows inside your coding agent. Includes `$kkt`, `$kkt-model`, `$kkt-run`, and `$kkt-loop`. | You want KKT to guide planning, approval, implementation, and validation. |
-| CLI | Deterministic `.kkt/` state scaffolding and validation used by the skills. | Durable state needs to stay consistent across KKT layers and continuations. |
-
+kkt does not implement a literal numerical solver. It borrows the discipline of constrained optimization and applies it to coding-agent decisions: feasibility first, optimization second, validation as the certificate.
 
 ## Install
 
-Install KKT:
+Install KKT with the script installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-The installer auto-detects supported coding agents, installs KKT skills into their global skill directories, and installs the companion CLI. Plain `install` is safe to rerun: it installs missing skills, keeps existing skills unchanged, and still installs or updates the CLI. Use `upgrade` when you want to replace installed KKT skills with the latest downloaded copy.
+The installer does two things:
+
+- installs the KKT skills into supported coding-agent skill directories
+- installs the companion `kkt` CLI used by those skills for workflow state and validation
+
+Plain `install` is conservative. It installs missing skills, keeps existing differing skills unchanged, and still installs or updates the CLI. Use `upgrade` when you want to replace installed KKT skills with the latest downloaded copy.
+
+Common options:
 
 ```bash
 scripts/install.sh --target codex
@@ -120,12 +139,19 @@ From a checkout:
 scripts/install.sh
 ```
 
+The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
+
 ## Quick Start
 
-Invoke the skill directly:
+Most users start with `$kkt`:
 
 ```text
-$kkt <feature to implement>
+$kkt <feature, bug fix, or refactor>
+```
+
+Use the deeper workflows when the task needs them:
+
+```text
 $kkt-model <architecture or tradeoff question>
 $kkt-run <implement completed model>
 $kkt-loop <long-running implementation>
@@ -140,50 +166,18 @@ Pi:          /skill:kkt, /skill:kkt-model, /skill:kkt-run, /skill:kkt-loop
 OpenCode:    ask OpenCode to use the relevant kkt skill
 ```
 
-The skills are installed from the downloaded source archive. The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
+## Choose a Workflow
 
-CLI workflow commands:
-
-```bash
-kkt start plan|model|run|loop "<request>"
-kkt status
-kkt next [--json]
-kkt show [artifact]
-kkt intent|discovery --method <method> "<layer output>"
-kkt model --method <method> "<planning contract>"
-kkt guardrails show|set|validate
-kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
-kkt run from-model [model-workspace]
-kkt plan|progress
-kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
-kkt notes
-kkt criteria add|satisfy|block
-kkt task add|start|done|skip|block
-kkt approve
-kkt block
-kkt validate
-kkt done
-kkt resume
-kkt replay --check
-```
-
-For run and loop workspaces, `guardrails.json` is the deterministic drift contract used by `kkt judge`; modeled constraints define allowed and blocked paths, and the judge compares them against current git changes. For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and Markdown files hold rich context and evidence. `kkt replay --check` reports drift between the event history and current state without mutating either file.
-
-
-## Skills
-
-| skill | use it for | output | durable state |
+| workflow | use it for | what it produces | durable state |
 | --- | --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | lightweight model, approval, implementation, validation | optional `.kkt/kkt.yaml` |
-| `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/`|
+| `$kkt` | normal feature work, bug fixes, and refactors | compact model, approval, implementation, validation | optional `.kkt/kkt.yaml` |
+| `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/` |
 | `$kkt-run` | implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
-| `$kkt-loop` | long-running or autonomous work | deeper planning, approval, durable workspace, progress, evidence | `.kkt/loop/<slug>/`|
+| `$kkt-loop` | long-running or continuation-heavy work | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
 
-All durable state lives under the project root's `.kkt/`; `kkt.yaml` is the canonical state index. For plan-tier work, it carries a compact `planning_contract` with objective function, files to modify, constraint functions, decision variables, and validation proof. For run and loop workspaces, `guardrails.json` is the drift contract for modeled constraints, allowed paths, blocked paths, and validation requirements. Markdown files hold richer context when YAML would lose detail. Advanced methods such as coupling maps, decision trees, staged-path planning, and tradeoff ranking are available when deeper modeling is needed, while `$kkt` stays compact.
+KKT is skill-first. The skills are what you invoke from your coding agent. The CLI is the deterministic tool those skills use for `.kkt/` scaffolding, status, guardrails, state persistence, and validation.
 
-## Request Shape
-
-kkt turns rough input into an intent frame before modeling:
+kkt turns rough input into an intent frame:
 
 ```text
 user goal
@@ -212,6 +206,43 @@ Binding constraints: respected
 Validation evidence: tests, checks, artifacts, or reason validation was not possible
 Residual risk: remaining uncertainty
 ```
+
+## CLI and State
+
+Most users should invoke the skills and let them call the CLI. The CLI exists so workflow state stays consistent across KKT layers, continuations, and agent turns.
+
+Useful commands:
+
+```bash
+kkt start plan|model|run|loop "<request>"
+kkt status
+kkt next [--json]
+kkt show [artifact]
+kkt guardrails show|set|validate
+kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
+kkt validate
+kkt done
+```
+
+Advanced workflow commands:
+
+```bash
+kkt intent|discovery|model --method <method> "<layer output>"
+kkt run from-model [model-workspace]
+kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
+kkt criteria add|satisfy|block
+kkt task add|start|done|skip|block
+kkt approve
+kkt block
+kkt resume
+kkt replay --check
+```
+
+All durable state lives under the project root's `.kkt/`. For plan-tier work, `.kkt/kkt.yaml` can carry the compact planning contract. For model, run, and loop workspaces, Markdown files hold richer context, and `guardrails.json` carries the deterministic drift contract.
+
+For run and loop workspaces, `kkt judge` checks explicit workflow state: approval, validation, replay state, stop conditions, and changed-path bounds. It is deterministic; semantic code-behavior judgment is not claimed as part of the current guardrail layer.
+
+For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and `kkt replay --check` reports drift between the event history and current state without mutating either file.
 
 ## License
 

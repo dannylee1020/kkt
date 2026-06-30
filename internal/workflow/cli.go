@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 )
 
 var Version = "dev"
@@ -29,7 +30,7 @@ Usage:
   kkt criteria [add|satisfy|block] [criterion]
   kkt task [add|start|done|skip|block] [task]
   kkt block [reason]
-  kkt validate [path]
+  kkt validate [--run] [--timeout duration] [path]
   kkt done [summary]
   kkt resume [path]
   kkt replay --check [path]
@@ -201,9 +202,18 @@ func runNext(args []string, stdout io.Writer) error {
 }
 
 func runValidate(args []string, stdout io.Writer) error {
-	workspace, err := ResolveWorkspace(".", firstArg(args))
+	options, err := parseValidateArgs(args)
 	if err != nil {
 		return err
+	}
+	workspace, err := ResolveWorkspace(".", options.Path)
+	if err != nil {
+		return err
+	}
+	if options.Run {
+		if err := RunRequiredValidationCommands(".", workspace, options.Timeout, stdout); err != nil {
+			return err
+		}
 	}
 	result, err := ValidateWorkspace(workspace)
 	if err != nil {
@@ -224,6 +234,45 @@ func runValidate(args []string, stdout io.Writer) error {
 		fmt.Fprintf(stdout, "- %s\n", issue)
 	}
 	return errors.New("workspace validation failed")
+}
+
+type validateOptions struct {
+	Run     bool
+	Timeout time.Duration
+	Path    string
+}
+
+func parseValidateArgs(args []string) (validateOptions, error) {
+	options := validateOptions{Timeout: 10 * time.Minute}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch arg {
+		case "--run":
+			options.Run = true
+		case "--timeout":
+			i++
+			if i >= len(args) {
+				return validateOptions{}, errors.New("validate --timeout requires a duration")
+			}
+			timeout, err := time.ParseDuration(args[i])
+			if err != nil {
+				return validateOptions{}, fmt.Errorf("invalid validate timeout %q: %w", args[i], err)
+			}
+			if timeout <= 0 {
+				return validateOptions{}, errors.New("validate timeout must be greater than zero")
+			}
+			options.Timeout = timeout
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return validateOptions{}, fmt.Errorf("validate does not accept flag: %s", arg)
+			}
+			if options.Path != "" {
+				return validateOptions{}, errors.New("validate accepts at most one path")
+			}
+			options.Path = arg
+		}
+	}
+	return options, nil
 }
 
 func rejectFlags(command string, args []string) error {
