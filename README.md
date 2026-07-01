@@ -15,37 +15,6 @@
 
 kkt applies [constrained optimization](https://en.wikipedia.org/wiki/Constrained_optimization) to coding-agent workflows. Named after the [Karush-Kuhn-Tucker conditions](https://en.wikipedia.org/wiki/Karush%E2%80%93Kuhn%E2%80%93Tucker_conditions), it translates mathematical modeling discipline into a practical framework for identifying application constraints, choosing feasible implementation paths, and validating the result.
 
-## Why KKT
-
-Most coding-agent workflows turn a request into a plan. That helps, but it carries risk: the plan focuses on what to change, not what must stay unchanged.
-
-kkt shifts the frame from planning to modeling, so the solution is built around the constraints already present in the codebase. It treats implementation as a constrained optimization problem: define the objective, mark the boundaries that cannot move, compare the viable paths, and name the proof that will make the result credible.
-
-Instead of:
-
-```text
-build xyz
-```
-
-kkt pushes the agent toward:
-
-```text
-what is the best feasible implementation,
-given what must stay true?
-```
-
-For coding agents, "what must stay true" is usually concrete:
-
-- public contracts and API behavior
-- architecture boundaries
-- files, modules, endpoints, schemas, and migrations
-- security, privacy, and data-integrity rules
-- UI and product boundaries
-- infrastructure and runtime limits
-- validation evidence required before completion
-
-he value is forcing feasibility before optimization: reject plans that violate hard constraints, compare the remaining plans, choose the best feasible path, then validate against the model.
-
 ## How It Works
 
 ```text
@@ -56,27 +25,12 @@ request --> agent --> plan --> edits --> validation
 
 With KKT:
 
-request --> agent --> (model constraints --> select optimized path) --> edits --> validation
-                                      |
-                                      v
-                    objective + decision variables + proof required
+request --> agent --> (model constraints --> model optimized path) --> edits --> validation
+                                          |
+                                          v
+                         objective + decision variables + proof
 ```
 
-## KKT vs Plan Mode
-
-Plan mode is useful for discussion and high-level sequencing. It usually answers: "What should we do?"
-
-kkt is stricter. It answers: "Which implementation is optimal inside these constraints?"
-
-| plan mode | kkt |
-| --- | --- |
-| conversational plan for the current task | constrained model for the implementation |
-| may describe steps without formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
-| often lives in the chat context | can persist workflow state under project-root `.kkt/` when useful |
-| validates after implementation | defines validation proof before implementation |
-| good for lightweight coordination | useful when correctness depends on preserving boundaries |
-
-Use normal plan mode when the task is small and low-risk. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
 
 ## The Model
 
@@ -119,9 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/insta
 The installer does two things:
 
 - installs the KKT skills into supported coding-agent skill directories
-- installs the companion `kkt` CLI used by those skills for workflow state and validation
-
-Plain `install` is conservative. It installs missing skills, keeps existing differing skills unchanged, and still installs or updates the CLI. Use `upgrade` when you want to replace installed KKT skills with the latest downloaded copy.
+- installs the `kkt` CLI used by those skills for determinisitic workflow and validation
 
 Common options:
 
@@ -133,13 +85,55 @@ scripts/install.sh --bin-dir ~/.local/bin
 scripts/install.sh upgrade
 ```
 
-From a checkout:
+The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
 
-```bash
-scripts/install.sh
+## Why KKT
+
+Most coding-agent workflows turn a request into a plan. That helps, but it carries risk: the plan focuses on what to change, not what must stay unchanged.
+
+kkt shifts the frame from planning to modeling, so the solution is built around the constraints already present in the codebase. It treats implementation as a constrained optimization problem: define the objective, mark the boundaries that cannot move, compare the viable paths, and name the proof that will make the result credible.
+
+Instead of:
+
+```text
+build xyz
 ```
 
-The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
+kkt pushes the agent toward:
+
+```text
+what is the best feasible implementation,
+given what must stay true?
+```
+
+For coding agents, "what must stay true" is usually concrete:
+
+- public contracts and API behavior
+- architecture boundaries
+- files, modules, endpoints, schemas, and migrations
+- security, privacy, and data-integrity rules
+- UI and product boundaries
+- infrastructure and runtime limits
+- validation evidence required before completion
+
+the value is forcing feasibility before optimization: reject plans that violate hard constraints, compare the remaining plans, choose the best feasible path, then validate against the model.
+
+
+## KKT vs Plan Mode
+
+Plan mode is useful for discussion and high-level sequencing. It usually answers: "What should we do?"
+
+kkt is stricter. It answers: "Which implementation is optimal inside these constraints?"
+
+| plan mode | kkt |
+| --- | --- |
+| conversational plan for the current task | constrained model for the implementation |
+| may describe steps without formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
+| often lives in the chat context | can persist workflow state under project-root `.kkt/` when useful |
+| validates after implementation | defines validation proof before implementation |
+| good for lightweight coordination | useful when correctness depends on preserving boundaries |
+
+Use normal plan mode when the task is small and low-risk. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
 
 ## Quick Start
 
