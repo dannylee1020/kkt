@@ -123,17 +123,19 @@ the value is forcing feasibility before optimization: reject plans that violate 
 
 Plan mode is useful for discussion and high-level sequencing. It usually answers: "What should we do?"
 
-kkt is stricter. It answers: "Which implementation is optimal inside these constraints?"
+They can also work together: use plan mode for discovery, preliminary findings, and rough sequencing, then use kkt when the work needs deeper and more robust modeling around constraints, tradeoffs, and validation proof.
+
+kkt answers: "Which implementation is optimal inside these constraints?"
 
 | plan mode | kkt |
 | --- | --- |
-| conversational plan for the current task | constrained model for the implementation |
-| may describe steps without formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
+| discovery, preliminary findings, and sequencing | deeper implementation model around constraints |
+| may describe steps before formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
 | often lives in the chat context | can persist workflow state under project-root `.kkt/` when useful |
 | validates after implementation | defines validation proof before implementation |
 | good for lightweight coordination | useful when correctness depends on preserving boundaries |
 
-Use normal plan mode when the task is small and low-risk. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
+Use plan mode or kkt interchangeably when the task is small and low-risk. For more complex work, it is often helpful to start in plan mode to surface context and preliminary options, then ask the agent to use kkt to model the optimized solution against the constraints. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
 
 ## Quick Start
 
@@ -203,9 +205,9 @@ Residual risk: remaining uncertainty
 
 ## CLI and State
 
-Most users should invoke the skills and let them call the CLI. The CLI exists so workflow state stays consistent across KKT layers, continuations, and agent turns.
+Agent uses the cli to persist state across layers, continuation and agent turns.
 
-Useful commands:
+Commands:
 
 ```bash
 kkt start plan|model|run|loop "<request>"
