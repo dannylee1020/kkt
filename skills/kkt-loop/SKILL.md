@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill for long-running, autonomous, or multi-step coding work where progress, evidence, and continuation state must survive across turns. It extends the KKT model into a durable execution loop.
 
-Read `references/feature-optimization-model.md`, `references/layered-modeling-methods.md`, `references/state-contract.md`, and `references/layers/` before acting. If `ultragoal` is available, use its goal-state and continuation semantics as the runtime pattern.
+Read `references/kkt-kernel.md`, `references/feature-optimization-model.md`, `references/layered-modeling-methods.md`, and `references/state-contract.md` before acting. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during discovery. Read `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes. If `ultragoal` is available, use its goal-state and continuation semantics as the runtime pattern.
 
 ## Core Rule
 
@@ -49,7 +49,7 @@ If `kkt` is missing, stop and ask the user to install or upgrade KKT. Do not han
 
 ## Durable State
 
-Create project-root `.kkt/loop/<slug>/` with `kkt start loop "<user request>"` so intent, discovery, model, guardrails, and approval state are durable. The workspace starts with approval pending; do not execute or launch continuation until approval is recorded. Use `references/state-contract.md` for file layout, YAML shape, artifact boundaries, and loop-state semantics.
+Create project-root `.kkt/loop/<slug>/` with `kkt start loop "<user request>"` so intent, discovery, model, guardrails, and approval state are durable. The workspace starts with approval pending; do not execute or launch continuation until approval is recorded. Use `references/state-contract.md` for file layout, artifact boundaries, and loop-state semantics. Load `references/schemas.md` only when a full YAML or JSON shape is needed.
 
 Loop workspaces use:
 
@@ -61,20 +61,21 @@ Loop workspaces use:
 
 1. Check current goal state with `get_goal` if available; do not create a second active goal without explicit user direction.
 2. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
-3. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass.
-4. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
-5. Inspect relevant repo context and validation paths before writing the model.
-6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
-7. Build the optimization model and execution contract from intent and discovery using the loop profile. The pre-approval output must include objective function, known constraints, files to modify or affected surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof plan, execution implications, residual risk, acceptance criteria, evidence required, guardrail constraints, allowed paths, blocked paths, and stop conditions.
-8. Run `kkt guardrails validate` and `kkt judge --checkpoint model-ready --json`; repair or stop on any blocking result.
-9. Show the final model and wait for explicit approval.
-10. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
-11. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-12. Before each work segment, run `kkt status`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
-13. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
-14. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
-15. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
-16. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
+3. If prior plan text exists, assimilate it as untrusted scaffold before modeling: extract signals, classify each claim, verify discoverable facts, and treat unverified claims as assumptions or candidates.
+4. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass.
+5. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
+6. Inspect relevant repo context and validation paths before writing the model. Use the discovery tooling ladder: `git` and `rg` first, `ast-grep` or `sg` for structural search when available and useful, optional helpers and language-native commands when they provide stronger evidence.
+7. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
+8. Build the optimization model and execution contract from intent and discovery using the loop profile. The pre-approval output must include objective function, known constraints, files to modify or affected surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof plan, execution implications, residual risk, acceptance criteria, evidence required, guardrail constraints, allowed paths, blocked paths, and stop conditions.
+9. Run `kkt guardrails validate` and `kkt judge --checkpoint model-ready --json`; repair or stop on any blocking result.
+10. Show the final model and wait for explicit approval.
+11. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
+12. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
+13. Before each work segment, run `kkt status`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
+14. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
+15. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
+16. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
+17. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
 
 ## Goal Objective Template
 

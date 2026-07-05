@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill for ordinary coding work that needs stricter planning than default plan mode. Apply constrained optimization as a discipline: choose the best feasible implementation given what must stay true.
 
-Read `references/feature-optimization-model.md` and `references/state-contract.md` before acting. Use `references/layered-modeling-methods.md` and `references/layers/` only when the request needs method selection beyond the plan profile.
+Read `references/kkt-kernel.md` before acting. Read `references/feature-optimization-model.md` when building the compact model. Read `references/state-contract.md` only when durable state is useful. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during non-trivial discovery or structural search. Read `references/layered-modeling-methods.md` only when method selection beyond the plan profile is needed. Read `references/schemas.md` only when a full copyable state, guardrail, or layer-output shape is needed.
 
 ## Core Rule
 
@@ -34,18 +34,19 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 ## Workflow
 
 1. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
-2. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
-3. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model.
-4. Separate explicit user statements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
-5. Build a compact model: objective function, system state, files to modify, constraint functions, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
-6. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.
-7. Reject infeasible plans, then choose the best feasible plan by this order: user request, correctness/security/data/public contracts, blast radius, existing architecture, maintainability, validation clarity.
-8. Show the final modeling result and wait for approval before editing.
-9. Execute the approved plan with focused edits, then validate with evidence and finish with a constraint audit.
+2. If prior plan text exists, assimilate it as untrusted scaffold: extract signals, classify claims, verify discoverable facts, and keep unverified claims as assumptions or candidates.
+3. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
+4. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model. Use `git` and `rg` as core discovery tools, `ast-grep` or `sg` for structural search when available and useful, and language-native commands when they provide stronger evidence.
+5. Separate explicit user statements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
+6. Build a compact model: objective function, system state, files to modify, constraint functions, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
+7. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.
+8. Reject infeasible plans, then choose the best feasible plan by this order: user request, correctness/security/data/public contracts, blast radius, existing architecture, maintainability, validation clarity.
+9. Show the final modeling result and wait for approval before editing.
+10. Execute the approved plan with focused edits, then validate with evidence and finish with a constraint audit.
 
 ## Output Discipline
 
-For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Switch to `$kkt-model` for deeper non-mutating modeling, `$kkt-run` to implement a completed model with guardrails, or `$kkt-loop` for long-running continuation.
+For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Load full schemas only when writing or auditing durable state. Switch to `$kkt-model` for deeper non-mutating modeling, `$kkt-run` to implement a completed model with guardrails, or `$kkt-loop` for long-running continuation.
 
 Before implementation, expose a compact optimized plan: objective function, known constraints, files to modify, constraint functions, decision variables, selected plan, rejected alternatives, binding constraints, validation proof plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 

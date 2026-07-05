@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill when modeling is already complete and the user wants implementation now. It is the execution tier between `$kkt-model` and `$kkt-loop`: richer than a compact plan, but lighter than a durable long-running loop.
 
-Read `references/feature-optimization-model.md`, `references/layered-modeling-methods.md`, `references/state-contract.md`, and `references/layers/` before acting.
+Read `references/kkt-kernel.md` and `references/state-contract.md` before acting. Read `references/feature-optimization-model.md` only when the completed model must be interpreted, repaired, or checked for drift. Read `references/plan-assimilation.md` only when the selected model used prior-plan assimilation. Read `references/discovery-tooling.md` only when verifying drift or missing facts. Read `references/layered-modeling-methods.md` only when reopening an incomplete model. Read `references/schemas.md` only when auditing full state or guardrail shapes.
 
 ## Core Rule
 
@@ -41,12 +41,13 @@ If no completed model workspace exists, switch back to `$kkt-model` instead of i
 1. Resolve or create the run workspace with `kkt run from-model [model-workspace]`.
 2. Read `kkt status`, `kkt show model`, `kkt show guardrails`, and `kkt guardrails validate`.
 3. Run `kkt judge --checkpoint model-ready --json`. Treat `block` as a hard stop, `warn` as a contract-quality issue to repair before risky edits, and `allow` as permission to seek approval. This checkpoint blocks if modeled constraints or allowed path bounds are missing.
-4. Show the user the execution contract: selected model, hard constraints, allowed paths, blocked paths, validation commands, and residual risk.
-5. Get explicit approval and record it with `kkt approve`.
-6. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
-7. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility.
-8. Record progress and validation evidence with CLI commands.
-9. Run `kkt validate` and `kkt judge --checkpoint finalize --json` before `kkt done`.
+4. Confirm whether the selected model used plan assimilation. Preserve the model's classification of prior-plan claims and do not promote unverified prior-plan assumptions during execution.
+5. Show the user the execution contract: selected model, hard constraints, allowed paths, blocked paths, validation commands, and residual risk.
+6. Get explicit approval and record it with `kkt approve`.
+7. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
+8. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility.
+9. Record progress and validation evidence with CLI commands.
+10. Run `kkt validate` and `kkt judge --checkpoint finalize --json` before `kkt done`.
 
 ## Stop Conditions
 

@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill when the deliverable is a model, decision brief, or implementation-ready recommendation rather than code. It is for architecture choices, feature shaping, complex implementation options, scope negotiation, and high-impact tradeoffs.
 
-Read `references/feature-optimization-model.md`, `references/layered-modeling-methods.md`, `references/state-contract.md`, and `references/layers/` before acting.
+Read `references/kkt-kernel.md` and `references/feature-optimization-model.md` before acting. Read `references/layered-modeling-methods.md` when choosing methods, which is normal for deep modeling. Read `references/state-contract.md` when durable model state is useful. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during discovery. Read `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes.
 
 ## Core Rule
 
@@ -36,17 +36,18 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 ## Workflow
 
 1. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
-2. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass using WHY/HOW, obstacle, example/counterexample, or pairwise tradeoff prompts.
-3. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs before choosing a model.
-4. Separate explicit requirements, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
-5. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
-6. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
-7. Build the shared optimization model from intent and discovery: objective function, system state, files to modify or affected surfaces, constraint functions, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
-8. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
-9. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
-10. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
-11. Translate the selected model into guardrail variables: constraints, allowed paths, blocked paths, validation evidence, and required commands.
-12. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, `kkt guardrails validate`, and `kkt validate` when a workspace exists.
+2. If prior plan text exists, assimilate it as untrusted scaffold before modeling: extract signals, classify each claim, verify discoverable facts, and treat unverified claims as assumptions or candidates.
+3. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass using WHY/HOW, obstacle, example/counterexample, or pairwise tradeoff prompts.
+4. Inspect relevant code, docs, configs, schemas, routes, tests, UI, infra, issues, or logs before choosing a model. Use the discovery tooling ladder: `git` and `rg` first, `ast-grep` or `sg` for structural search when available and useful, optional helpers and language-native commands when they provide stronger evidence.
+5. Separate explicit requirements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
+6. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
+7. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
+8. Build the shared optimization model from intent and discovery: objective function, system state, files to modify or affected surfaces, constraint functions, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
+9. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
+10. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
+11. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
+12. Translate the selected model into guardrail variables: constraints, allowed paths, blocked paths, validation evidence, and required commands.
+13. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, `kkt guardrails validate`, and `kkt validate` when a workspace exists.
 
 ## End States
 
@@ -62,7 +63,7 @@ Decision briefs must include the optimized-plan reasoning from `references/featu
 
 ## Durable Output
 
-For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. `guardrails.json` carries the modeled constraints and path bounds that `$kkt-run` or `$kkt-loop` will enforce before mutation. Do not create execution files unless switching to `$kkt-run` or `$kkt-loop`.
+For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. `guardrails.json` carries the modeled constraints and path bounds that `$kkt-run` or `$kkt-loop` will enforce before mutation. Load `references/schemas.md` only when a full copyable shape is needed. Do not create execution files unless switching to `$kkt-run` or `$kkt-loop`.
 
 ## Do Not
 
