@@ -36,7 +36,7 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 1. Capture intent: user goal, desired behavior, user-visible success, scope boundary, examples, priority signals, and explicit user constraints.
 2. If prior plan text exists, assimilate it as untrusted scaffold: extract signals, classify claims, verify discoverable facts, and keep unverified claims as assumptions or candidates.
 3. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
-4. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model. Use `git` and `rg` as core discovery tools, `ast-grep` or `sg` for structural search when available and useful, and language-native commands when they provide stronger evidence.
+4. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model. Use `rg` directly for broad text and file discovery, `ast-grep` directly for structural search when syntax matters, `git` for repository state, and language-native commands when they provide stronger evidence.
 5. Separate explicit user statements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
 6. Build a compact model: objective function, system state, files to modify, constraint functions, decision variables, hard/soft constraints, feasible plans, selected plan, binding constraints, and sensitivity.
 7. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.

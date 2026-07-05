@@ -66,7 +66,7 @@ Purpose: convert intent into inspected facts and traceable system context.
 - Traceability matrix: map intent to files, modules, routes, schemas, tests, docs, config, and runtime boundaries.
 - Coupling map: identify callers, public interfaces, state owners, side effects, and downstream contracts.
 - DSM-lite: use a small dependency matrix when several modules/workflows make blast radius unclear.
-- Structural discovery: use `ast-grep` or `sg` when syntax matters.
+- Structural discovery: use `ast-grep` when syntax matters.
 
 Discovery output must distinguish observed facts, inferred constraints, assumptions, unknowns, validation paths, unavailable preferred tools, fallback notes, and important negative searches.
 

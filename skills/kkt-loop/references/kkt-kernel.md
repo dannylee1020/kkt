@@ -38,10 +38,11 @@ Every KKT model or approval-ready plan needs:
 
 ## Discovery Rules
 
-- Use `git` and `rg` as the default proof tools.
-- Use `ast-grep` or `sg` when syntax matters and text search would be ambiguous.
+- Use `git` for repository boundaries, status, diffs, history, and changed-path scope.
+- Use `rg` immediately for broad text and file discovery.
+- Use `ast-grep` immediately when syntax matters and text search would be ambiguous.
 - Use language-native tools when they reveal package boundaries, types, route maps, generated-code boundaries, or test contracts.
-- Optional tools improve confidence but must not block basic KKT operation.
+- If `ast-grep` is unavailable in an already-installed environment, record the setup gap and do not claim AST-level certainty from text search alone.
 - Record important negative searches when they shape the selected plan.
 
 ## Completion Certificate

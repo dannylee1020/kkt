@@ -19,7 +19,7 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade [installer options]
   curl -fsSL <install.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [installer options]
 
-Installs KKT skills and the companion kkt CLI used for durable state.
+Installs KKT skills, ast-grep, and the companion kkt CLI used for durable state.
 
 Common options:
   --target <name>   auto | codex | claude | pi | opencode | all
@@ -535,6 +535,43 @@ doctor() {
   printf 'ok: %s\n' "$source_skills_root"
 }
 
+install_ast_grep_with() {
+  local installer="$1"
+  shift
+  log "dependency: installing ast-grep with $installer"
+  "$@"
+}
+
+ensure_ast_grep() {
+  local path
+  if path="$(command -v ast-grep 2>/dev/null)"; then
+    log "dependency: ast-grep already installed at $path"
+    return
+  fi
+
+  if [ "$dry_run" = "true" ]; then
+    printf 'dependency: would install ast-grep if missing\n'
+    return
+  fi
+
+  if command_exists brew; then
+    install_ast_grep_with "brew" brew install ast-grep
+    return
+  fi
+
+  if command_exists cargo; then
+    install_ast_grep_with "cargo" cargo install ast-grep --locked
+    return
+  fi
+
+  if command_exists npm; then
+    install_ast_grep_with "npm" npm i @ast-grep/cli -g
+    return
+  fi
+
+  fail "ast-grep is required for KKT structural discovery. Install it with: brew install ast-grep, cargo install ast-grep --locked, or npm i @ast-grep/cli -g."
+}
+
 install_cli() {
   local kkt_command cli_installer
   kkt_command="$(expand_home "$bin_dir")/kkt"
@@ -575,6 +612,10 @@ main() {
     doctor
     return
   fi
+
+  case "$command_name" in
+    install|upgrade) ensure_ast_grep ;;
+  esac
 
   need_command diff
   resolve_roots

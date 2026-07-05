@@ -70,10 +70,11 @@ Install KKT with the script installer:
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-The installer does two things:
+The installer does three things:
 
 - installs the KKT skills into supported coding-agent skill directories
-- installs the `kkt` CLI used by those skills for determinisitic workflow and validation
+- installs `ast-grep` for syntax-aware structural discovery when it is missing
+- installs the `kkt` CLI used by those skills for deterministic workflow and validation
 
 Common options:
 
@@ -119,11 +120,13 @@ For coding agents, "what must stay true" is usually concrete:
 the value is forcing feasibility before optimization: reject plans that violate hard constraints, compare the remaining plans, choose the best feasible path, then validate against the model.
 
 
-## KKT vs Plan Mode
+## KKT and Plan Mode
 
-Plan mode is useful for discussion and high-level sequencing. It usually answers: "What should we do?"
+KKT supports two realistic entry paths.
 
-They can also work together: use plan mode for discovery, preliminary findings, and rough sequencing, then use kkt when the work needs deeper and more robust modeling around constraints, tradeoffs, and validation proof.
+Use KKT directly when you want it to substitute for default plan mode. In this path, KKT owns intent capture, discovery, feasibility checks, selected implementation model, approval, execution, and validation proof.
+
+Use KKT after plan mode when a default plan already exists. In this path, the prior plan is useful scaffolding, but it is not a contract. KKT extracts whatever is useful, classifies claims as user input, assumptions, discoverable facts, candidate decisions, candidate constraints, or candidate validation, then verifies repo facts before turning them into the optimized model.
 
 kkt answers: "Which implementation is optimal inside these constraints?"
 
@@ -135,7 +138,7 @@ kkt answers: "Which implementation is optimal inside these constraints?"
 | validates after implementation | defines validation proof before implementation |
 | good for lightweight coordination | useful when correctness depends on preserving boundaries |
 
-Use plan mode or kkt interchangeably when the task is small and low-risk. For more complex work, it is often helpful to start in plan mode to surface context and preliminary options, then ask the agent to use kkt to model the optimized solution against the constraints. Use kkt when the hard part is not "make a list of steps," but "change the system without violating what must stay true."
+Use plan mode or KKT interchangeably when the task is small and low-risk. For more complex work, either start directly with KKT or start in plan mode to surface context and preliminary options, then ask the agent to use KKT to optimize the implementation path against the constraints. KKT cannot control a host agent's internal plan-mode output; it can only consume that output, verify it, and rebuild the contract inside KKT.
 
 ## Quick Start
 
@@ -185,6 +188,14 @@ explicit user constraints
 
 The user does not need to provide all of this upfront. Repo constraints, affected files, and validation paths are discovered from the codebase when possible and marked as assumptions when needed.
 
+When KKT is invoked after a prior plan, it treats the plan as untrusted scaffold:
+
+```text
+plan output --> extract signals --> classify claims --> verify facts --> optimize KKT model
+```
+
+Plan claims do not become KKT facts until KKT verifies them or explicitly carries them as assumptions.
+
 Before edits, the selected model should name:
 
 - objective function
@@ -219,6 +230,8 @@ kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
 kkt validate
 kkt done
 ```
+
+Discovery uses agent tools directly. Use `rg` for broad text and file discovery, then use `ast-grep` for syntax-aware questions such as call sites, imports, handlers, declarations, component patterns, and error-handling shapes. Optional helpers such as `fd`, `ctags`, `tokei`, and repo-native language tools are used when available, but discovery should not be routed through a KKT CLI command.
 
 Advanced workflow commands:
 
