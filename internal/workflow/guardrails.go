@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -105,6 +107,12 @@ type JudgeResult struct {
 	Reason        string   `json:"reason"`
 	Repair        []string `json:"repair,omitempty"`
 	Evidence      []string `json:"evidence,omitempty"`
+}
+
+type ApprovalBaseline struct {
+	SchemaVersion int               `json:"schema_version"`
+	RecordedAt    string            `json:"recorded_at"`
+	Paths         map[string]string `json:"paths"`
 }
 
 func runGuardrails(args []string, stdout io.Writer) error {
@@ -456,6 +464,15 @@ func validateGuardrails(workspace string) []string {
 	if contract.SchemaVersion != 1 {
 		issues = append(issues, "guardrails.json schema_version must be 1")
 	}
+	if strings.TrimSpace(contract.Source.WorkspaceType) == "" {
+		issues = append(issues, "guardrails.json source.workspace_type is required")
+	}
+	if strings.TrimSpace(contract.Source.Workspace) == "" {
+		issues = append(issues, "guardrails.json source.workspace is required")
+	}
+	if strings.TrimSpace(contract.Source.Request) == "" {
+		issues = append(issues, "guardrails.json source.request is required")
+	}
 	if strings.TrimSpace(contract.Workflow.ExecutionMode) == "" {
 		issues = append(issues, "guardrails.json workflow.execution_mode is required")
 	}
@@ -493,7 +510,11 @@ func changedPathIssues(root, workspace string, contract GuardrailContract) []str
 	}
 	allowed := contract.allowedPaths()
 	blocked := contract.blockedPaths()
+	baseline, hasBaseline, baselineErr := readApprovalBaseline(workspace)
 	var issues []string
+	if baselineErr != nil {
+		issues = append(issues, "approval baseline could not be read: "+baselineErr.Error())
+	}
 	for _, path := range changed {
 		if strings.HasPrefix(path, ".kkt/") || path == ".kkt" {
 			continue
@@ -503,10 +524,85 @@ func changedPathIssues(root, workspace string, contract GuardrailContract) []str
 			continue
 		}
 		if len(allowed) > 0 && !matchesAnyPathPattern(path, allowed) {
+			if hasBaseline && unchangedFromApprovalBaseline(projectRootDir, baseline, path) {
+				continue
+			}
 			issues = append(issues, "changed path outside allowed bounds: "+path)
 		}
 	}
 	return issues
+}
+
+func writeApprovalBaseline(workspace string) error {
+	projectRootDir, err := projectRootForWorkspace(".", workspace)
+	if err != nil {
+		return err
+	}
+	changed, err := changedGitPaths(projectRootDir)
+	if err != nil {
+		return err
+	}
+	baseline := ApprovalBaseline{
+		SchemaVersion: 1,
+		RecordedAt:    time.Now().UTC().Format(time.RFC3339),
+		Paths:         map[string]string{},
+	}
+	for _, path := range changed {
+		if strings.HasPrefix(path, ".kkt/") || path == ".kkt" {
+			continue
+		}
+		fingerprint, err := pathFingerprint(projectRootDir, path)
+		if err != nil {
+			return err
+		}
+		baseline.Paths[path] = fingerprint
+	}
+	payload, err := json.MarshalIndent(baseline, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(workspace, "approval-baseline.json"), append(payload, '\n'), 0o644)
+}
+
+func readApprovalBaseline(workspace string) (ApprovalBaseline, bool, error) {
+	payload, err := os.ReadFile(filepath.Join(workspace, "approval-baseline.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ApprovalBaseline{}, false, nil
+		}
+		return ApprovalBaseline{}, false, err
+	}
+	var baseline ApprovalBaseline
+	if err := json.Unmarshal(payload, &baseline); err != nil {
+		return ApprovalBaseline{}, true, err
+	}
+	if baseline.Paths == nil {
+		baseline.Paths = map[string]string{}
+	}
+	return baseline, true, nil
+}
+
+func unchangedFromApprovalBaseline(projectRootDir string, baseline ApprovalBaseline, path string) bool {
+	approvedFingerprint, ok := baseline.Paths[path]
+	if !ok {
+		return false
+	}
+	currentFingerprint, err := pathFingerprint(projectRootDir, path)
+	return err == nil && currentFingerprint == approvedFingerprint
+}
+
+func pathFingerprint(projectRootDir, path string) (string, error) {
+	fullPath := filepath.Join(projectRootDir, filepath.FromSlash(path))
+	payload, err := os.ReadFile(fullPath)
+	switch {
+	case err == nil:
+		sum := sha256.Sum256(payload)
+		return hex.EncodeToString(sum[:]), nil
+	case os.IsNotExist(err):
+		return "<deleted>", nil
+	default:
+		return "", err
+	}
 }
 
 func (contract GuardrailContract) allowedPaths() []string {
@@ -688,7 +784,8 @@ func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
 	if err := os.MkdirAll(runWorkspace, 0o755); err != nil {
 		return Workspace{}, err
 	}
-	files := workspaceFiles(request, "run", now)
+	sourceWorkspace := normalizeRepoPath(filepath.Join(".kkt", currentPointer("run", slug)))
+	files := workspaceFiles(request, "run", now, sourceWorkspace)
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(runWorkspace, name), []byte(content), 0o644); err != nil {
 			return Workspace{}, err
@@ -697,7 +794,7 @@ func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
 	for _, name := range []string{"intent.md", "discovery.md", "model.md", "guardrails.json"} {
 		if err := copyWorkspaceFile(modelWorkspace, runWorkspace, name); err != nil {
 			if errors.Is(err, os.ErrNotExist) && name == "guardrails.json" {
-				if writeErr := os.WriteFile(filepath.Join(runWorkspace, name), []byte(defaultGuardrailsJSON(request, "run", modelWorkspace)), 0o644); writeErr != nil {
+				if writeErr := os.WriteFile(filepath.Join(runWorkspace, name), []byte(defaultGuardrailsJSON(request, "run", workspaceSourcePath(projectRootDir, modelWorkspace))), 0o644); writeErr != nil {
 					return Workspace{}, writeErr
 				}
 				continue
@@ -706,6 +803,9 @@ func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
 		}
 	}
 	if err := updateRunSource(runWorkspace, modelWorkspace); err != nil {
+		return Workspace{}, err
+	}
+	if err := markImportedModelLayers(runWorkspace, modelWorkspace); err != nil {
 		return Workspace{}, err
 	}
 	if err := os.WriteFile(filepath.Join(base, "current"), []byte(currentPointer("run", slug)+"\n"), 0o644); err != nil {
@@ -736,13 +836,46 @@ func updateRunSource(runWorkspace, modelWorkspace string) error {
 		return nil
 	}
 	contract.Source.WorkspaceType = "model"
-	contract.Source.Workspace = modelWorkspace
+	projectRootDir, rootErr := projectRootForWorkspace(".", runWorkspace)
+	if rootErr == nil {
+		contract.Source.Workspace = workspaceSourcePath(projectRootDir, modelWorkspace)
+	} else {
+		contract.Source.Workspace = modelWorkspace
+	}
 	contract.Workflow.ExecutionMode = "run"
 	payload, err := json.MarshalIndent(contract, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(runWorkspace, "guardrails.json"), append(payload, '\n'), 0o644)
+}
+
+func markImportedModelLayers(runWorkspace, modelWorkspace string) error {
+	source := modelWorkspace
+	if projectRootDir, err := projectRootForWorkspace(".", runWorkspace); err == nil {
+		source = workspaceSourcePath(projectRootDir, modelWorkspace)
+	}
+	for _, layer := range []string{"intent", "discovery", "modeling"} {
+		summary := "Imported from " + source
+		if err := updateLayerState(runWorkspace, layer, "complete", "imported", summary); err != nil {
+			return err
+		}
+		if err := appendMethodInvocation(runWorkspace, layer, "imported", summary); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func workspaceSourcePath(projectRootDir, workspace string) string {
+	absoluteRoot, rootErr := filepath.Abs(projectRootDir)
+	absoluteWorkspace, workspaceErr := filepath.Abs(workspace)
+	if rootErr == nil && workspaceErr == nil {
+		if rel, err := filepath.Rel(absoluteRoot, absoluteWorkspace); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+			return normalizeRepoPath(rel)
+		}
+	}
+	return normalizeRepoPath(workspace)
 }
 
 func stateRequest(workspace string) (string, error) {

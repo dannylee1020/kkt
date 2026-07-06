@@ -20,16 +20,16 @@ Use the `kkt` CLI whenever durable state is useful. The skill owns reasoning pol
 
 ```text
 kkt start plan "<user request>"
-kkt status
+kkt status [--json]
 kkt next
 kkt model "<objective_function, files_to_modify, constraint_functions, decision_variables, validation_proof, and selected compact model>"
 kkt approve "<approved scope>"
 kkt evidence "<validation evidence>"
-kkt validate
+kkt validate [--run]
 kkt done
 ```
 
-If `kkt` is missing and durable state is needed, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state.
+If `kkt` is missing and durable state is needed, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state. Use `kkt validate --run` when guardrails define required commands; `kkt evidence` alone is narrative evidence, not command proof.
 
 ## Workflow
 

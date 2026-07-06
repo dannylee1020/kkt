@@ -31,6 +31,19 @@ type ValidationResult struct {
 	Issues []string
 }
 
+type StatusReport struct {
+	SchemaVersion int              `json:"schema_version"`
+	Workspace     string           `json:"workspace"`
+	Status        string           `json:"status"`
+	ActiveLayer   string           `json:"active_layer"`
+	Profile       string           `json:"profile"`
+	Approval      string           `json:"approval"`
+	CurrentTask   string           `json:"current_task,omitempty"`
+	Validation    ValidationResult `json:"validation"`
+	StaleComplete bool             `json:"stale_complete"`
+	Next          NextAction       `json:"next"`
+}
+
 func StartWorkflow(root, request, profile string) (Workspace, error) {
 	if profile != "plan" && profile != "loop" && profile != "model" && profile != "run" {
 		return Workspace{}, fmt.Errorf("unsupported profile %q", profile)
@@ -47,7 +60,8 @@ func StartWorkflow(root, request, profile string) (Workspace, error) {
 		return Workspace{}, err
 	}
 
-	files := workspaceFiles(request, profile, now)
+	sourceWorkspace := normalizeRepoPath(filepath.Join(".kkt", currentPointer(profile, slug)))
+	files := workspaceFiles(request, profile, now, sourceWorkspace)
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(workspace, name), []byte(content), 0o644); err != nil {
 			return Workspace{}, err
@@ -265,12 +279,18 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 		}
 	}
 	if state.WorkspaceType == "run" || state.WorkspaceType == "loop" || (state.WorkspaceType == "model" && state.ActiveLayer == "validation") {
+		for _, issue := range validateGuardrails(workspace) {
+			result.OK = false
+			result.Issues = append(result.Issues, issue)
+		}
 		if contract, guardrailErr := readGuardrails(workspace); guardrailErr == nil {
 			for _, issue := range guardrailExecutionReadinessIssues(contract) {
 				result.OK = false
 				result.Issues = append(result.Issues, issue)
 			}
 		}
+	}
+	if state.WorkspaceType == "run" || state.WorkspaceType == "loop" {
 		for _, issue := range validationCommandProofIssues(workspace) {
 			result.OK = false
 			result.Issues = append(result.Issues, issue)
@@ -327,6 +347,12 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 			}
 		}
 	}
+	if state.Status == "complete" {
+		for _, issue := range completeLayerIssues(workspace, state.WorkspaceType) {
+			result.OK = false
+			result.Issues = append(result.Issues, issue)
+		}
+	}
 	return result, nil
 }
 
@@ -340,9 +366,100 @@ func planContractIssues(workspace string) []string {
 	for _, field := range requiredPlanContractFields() {
 		if !strings.Contains(text, field+":") {
 			issues = append(issues, "missing plan contract field "+field)
+			continue
+		}
+		if planContractFieldStatus(text, field) == "pending" {
+			issues = append(issues, "plan contract field "+field+" is pending")
 		}
 	}
 	return issues
+}
+
+func planContractFieldStatus(text, field string) string {
+	lines := strings.Split(text, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == field+":" {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+	for i := start + 1; i < len(lines); i++ {
+		line := lines[i]
+		if line != "" && !strings.HasPrefix(line, " ") {
+			return ""
+		}
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") && strings.HasSuffix(strings.TrimSpace(line), ":") {
+			return ""
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "status:") {
+			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "status:")), `"`)
+		}
+	}
+	return ""
+}
+
+func completeLayerIssues(workspace, workspaceType string) []string {
+	statuses, err := layerStatuses(workspace)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	var required []string
+	switch workspaceType {
+	case "plan":
+		required = []string{"intent", "discovery", "modeling"}
+	case "model":
+		required = []string{"intent", "discovery", "modeling"}
+	case "run", "loop":
+		required = []string{"intent", "discovery", "modeling", "execution", "validation"}
+	}
+	var issues []string
+	for _, layer := range required {
+		status := statuses[layer]
+		if status != "complete" {
+			if status == "" {
+				status = "missing"
+			}
+			issues = append(issues, fmt.Sprintf("complete workspace has %s layer %s", layer, status))
+		}
+	}
+	return issues
+}
+
+func layerStatuses(workspace string) (map[string]string, error) {
+	content, err := os.ReadFile(filepath.Join(workspace, "kkt.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	statuses := map[string]string{}
+	inLayers := false
+	currentLayer := ""
+	for _, line := range strings.Split(string(content), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "layers:" {
+			inLayers = true
+			currentLayer = ""
+			continue
+		}
+		if inLayers && line != "" && !strings.HasPrefix(line, " ") {
+			break
+		}
+		if !inLayers {
+			continue
+		}
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") && strings.HasSuffix(trimmed, ":") {
+			currentLayer = strings.TrimSuffix(trimmed, ":")
+			continue
+		}
+		if currentLayer != "" && strings.HasPrefix(trimmed, "status:") {
+			statuses[currentLayer] = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "status:")), `"`)
+		}
+	}
+	return statuses, nil
 }
 
 func requiredPlanContractFields() []string {
@@ -607,7 +724,7 @@ func currentPointer(profile, slug string) string {
 	}
 }
 
-func workspaceFiles(request, profile string, now time.Time) map[string]string {
+func workspaceFiles(request, profile string, now time.Time, sourceWorkspace string) map[string]string {
 	files := map[string]string{
 		"kkt.yaml": stateYAML(request, profile, now),
 	}
@@ -617,7 +734,7 @@ func workspaceFiles(request, profile string, now time.Time) map[string]string {
 	files["intent.md"] = intentMarkdown(request)
 	files["discovery.md"] = "# Discovery\n\nStatus: pending\n\nRecord repo facts, discovered constraints, validation paths, and remaining unknowns here.\n"
 	files["model.md"] = "# Model\n\nStatus: pending\n\nRecord method selection, objective function, known constraints, files to modify, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk here.\n"
-	files["guardrails.json"] = defaultGuardrailsJSON(request, profile, "")
+	files["guardrails.json"] = defaultGuardrailsJSON(request, profile, sourceWorkspace)
 	if profile == "model" {
 		return files
 	}

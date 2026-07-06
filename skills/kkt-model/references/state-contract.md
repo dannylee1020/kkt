@@ -37,7 +37,7 @@ kkt start loop "<request>"
 kkt intent|discovery|model --method <method> "<layer output>"
 kkt guardrails show|set|validate
 kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
-kkt validate
+kkt validate [--run]
 kkt done
 ```
 
@@ -52,6 +52,8 @@ kkt done
 - `evidence.md`: validation map, command outputs, artifacts, final certificate.
 - `notes.md`: observations, assumptions, open questions, deferred ideas.
 - `events.jsonl`: append-only loop event history, not a competing source of truth for current state.
+
+When `guardrails.json` lists `validation.required_commands`, run or loop workspaces must use `kkt validate --run` to record deterministic command proof. `kkt evidence` records narrative evidence and criterion mapping only.
 
 ## Handoff Rules
 

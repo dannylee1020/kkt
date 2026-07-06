@@ -167,6 +167,38 @@ func TestRunGuardrailsShowAndValidate(t *testing.T) {
 	}
 }
 
+func TestRunGuardrailsValidateRequiresSourceWorkspace(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "model", "choose", "API", "shape"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	invalid := strings.Replace(testGuardrailsJSON("model", []string{"**"}, nil), `"workspace":".kkt/test-workspace"`, `"workspace":""`, 1)
+	if err := Run([]string{"guardrails", "set", invalid}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+
+	var validate bytes.Buffer
+	err = Run([]string{"guardrails", "validate"}, &validate, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("guardrails validate should fail when source.workspace is empty")
+	}
+	if text := validate.String(); !strings.Contains(text, "source.workspace is required") {
+		t.Fatalf("guardrails validation output missing source workspace issue:\n%s", text)
+	}
+}
+
 func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
@@ -209,6 +241,21 @@ func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 	}
 	if filepath.Base(filepath.Dir(workspace)) != "run" {
 		t.Fatalf("current workspace = %q, want run workspace", workspace)
+	}
+	stateBytes, err := os.ReadFile(filepath.Join(workspace, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateText := string(stateBytes)
+	for _, want := range []string{
+		`intent:`,
+		`status: "complete"`,
+		`method: "imported"`,
+		`method_invocations:`,
+	} {
+		if !strings.Contains(stateText, want) {
+			t.Fatalf("run state missing imported model marker %q:\n%s", want, stateText)
+		}
 	}
 
 	var judge bytes.Buffer
@@ -322,6 +369,60 @@ func TestRunJudgeAllowsChangedPathInsideAllowedBounds(t *testing.T) {
 	}
 	if text := allowed.String(); !strings.Contains(text, `"verdict": "allow"`) {
 		t.Fatalf("pre-mutation judge should allow in-scope changes:\n%s", text)
+	}
+}
+
+func TestApprovalBaselineAllowsUnchangedPreexistingDirtyPath(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	initGit(t, root)
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("preexisting\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "run", "path", "scope"},
+		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
+		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
+		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"approve", "Approved workflow-only scope"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	var allowed bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &allowed, &bytes.Buffer{}); err != nil {
+		t.Fatalf("unchanged preexisting dirty path should not block:\n%s", allowed.String())
+	}
+	if text := allowed.String(); !strings.Contains(text, `"verdict": "allow"`) {
+		t.Fatalf("pre-mutation judge should allow unchanged preexisting dirty path:\n%s", text)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("changed after approval\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var blocked bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("changed out-of-scope path after approval should block")
+	}
+	if text := blocked.String(); !strings.Contains(text, "changed path outside allowed bounds: README.md") {
+		t.Fatalf("pre-mutation judge output missing changed out-of-scope path:\n%s", text)
 	}
 }
 
@@ -535,6 +636,10 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "upgrade", "kkt", "loop"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
 		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
 		{"approve", "Approved test loop"},
 		{"task", "add", "Inspect code"},
@@ -822,15 +927,41 @@ func TestValidateReportsMissingRequiredCommandProof(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	startValidationModelWorkspace(t, []string{"printf ok"})
+	startValidationRunWorkspace(t, []string{"printf ok"})
 
 	var stdout bytes.Buffer
 	err = Run([]string{"validate"}, &stdout, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("validate should fail when a required command has no proof")
 	}
-	if text := stdout.String(); !strings.Contains(text, "required command not run: printf ok") {
+	if text := stdout.String(); !strings.Contains(text, "required command not run: printf ok") || !strings.Contains(text, "kkt validate --run") {
 		t.Fatalf("validate output missing command proof issue:\n%s", text)
+	}
+}
+
+func TestValidateModelDoesNotRequireCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationModelWorkspace(t, []string{"printf ok"})
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"validate"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("model validate should not require command proof: %v\n%s", err, stdout.String())
+	}
+	if text := stdout.String(); !strings.Contains(text, "valid:") {
+		t.Fatalf("model validate output missing valid status:\n%s", text)
 	}
 }
 
@@ -849,7 +980,7 @@ func TestValidateRunRecordsRequiredCommandProof(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	workspace := startValidationModelWorkspace(t, []string{"printf ok"})
+	workspace := startValidationRunWorkspace(t, []string{"printf ok"})
 
 	var stdout bytes.Buffer
 	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &stdout, &bytes.Buffer{}); err != nil {
@@ -888,7 +1019,7 @@ func TestValidateRunFailsWhenRequiredCommandFails(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	startValidationModelWorkspace(t, []string{"false"})
+	startValidationRunWorkspace(t, []string{"false"})
 
 	var stdout bytes.Buffer
 	err = Run([]string{"validate", "--run", "--timeout", "5s"}, &stdout, &bytes.Buffer{})
@@ -915,7 +1046,7 @@ func TestValidateReportsStaleRequiredCommandProof(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	startValidationModelWorkspace(t, []string{"true"})
+	startValidationRunWorkspace(t, []string{"true"})
 
 	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
@@ -934,6 +1065,42 @@ func TestValidateReportsStaleRequiredCommandProof(t *testing.T) {
 	}
 }
 
+func TestStatusReportsStaleCompleteWorkspace(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationRunWorkspace(t, []string{"true"})
+	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"done", "Run complete"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "changed.txt"), []byte("changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var status bytes.Buffer
+	if err := Run([]string{"status", "--json"}, &status, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	text := status.String()
+	if !strings.Contains(text, `"stale_complete": true`) || !strings.Contains(text, `"action": "repair_invalid_completion"`) {
+		t.Fatalf("status --json should report stale complete repair action:\n%s", text)
+	}
+}
+
 func TestJudgeFinalizeBlocksMissingRequiredCommandProof(t *testing.T) {
 	root := t.TempDir()
 	initGit(t, root)
@@ -949,7 +1116,7 @@ func TestJudgeFinalizeBlocksMissingRequiredCommandProof(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	startValidationModelWorkspace(t, []string{"printf ok"})
+	startValidationRunWorkspace(t, []string{"printf ok"})
 
 	var stdout bytes.Buffer
 	err = Run([]string{"judge", "--checkpoint", "finalize", "--json"}, &stdout, &bytes.Buffer{})
@@ -982,6 +1149,30 @@ func startValidationModelWorkspace(t *testing.T, requiredCommands []string) stri
 	return workspace
 }
 
+func startValidationRunWorkspace(t *testing.T, requiredCommands []string) string {
+	t.Helper()
+	commands := [][]string{
+		{"start", "run", "execute", "selected", "model"},
+		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
+		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
+		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"guardrails", "set", testGuardrailsJSONWithCommands("run", []string{"**"}, nil, requiredCommands)},
+		{"approve", "Approved validation run"},
+		{"plan", "Run selected validation model."},
+		{"evidence", "Narrative evidence recorded."},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
 func testGuardrailsJSON(executionMode string, allowedPaths, blockedPaths []string) string {
 	return testGuardrailsJSONWithCommands(executionMode, allowedPaths, blockedPaths, nil)
 }
@@ -991,7 +1182,7 @@ func testGuardrailsJSONWithCommands(executionMode string, allowedPaths, blockedP
 		"schema_version": 1,
 		"source": map[string]any{
 			"workspace_type": executionMode,
-			"workspace":      "",
+			"workspace":      ".kkt/test-workspace",
 			"request":        "test request",
 		},
 		"constraints": []map[string]any{

@@ -184,6 +184,11 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 	if err := appendPlanStateEntry(workspace, artifact, content); err != nil {
 		return err
 	}
+	if artifact == "model" {
+		if err := markPlanContractComplete(workspace); err != nil {
+			return err
+		}
+	}
 	if err := updateStateForArtifact(workspace, artifact, content, method, EvidenceOptions{}); err != nil {
 		return err
 	}
@@ -215,6 +220,9 @@ func runApprove(args []string, stdout io.Writer) error {
 		scope = "Approved selected KKT model."
 	}
 	if err := updateApproval(workspace, "approved", scope); err != nil {
+		return err
+	}
+	if err := writeApprovalBaseline(workspace); err != nil {
 		return err
 	}
 	if err := updateTopLevelState(workspace, "status", "approved"); err != nil {
@@ -313,6 +321,16 @@ func runDone(args []string, stdout io.Writer) error {
 	}
 	if !result.OK {
 		for _, issue := range result.Issues {
+			fmt.Fprintf(stdout, "- %s\n", issue)
+		}
+		return errors.New("workspace validation failed")
+	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
+	if issues := completeLayerIssues(workspace, state.WorkspaceType); len(issues) > 0 {
+		for _, issue := range issues {
 			fmt.Fprintf(stdout, "- %s\n", issue)
 		}
 		return errors.New("workspace validation failed")
@@ -775,6 +793,13 @@ func updateLayerState(workspace, layer, status, method, summary string) error {
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
+func markValidationLayerComplete(workspace string) error {
+	if err := updateLayerState(workspace, "validation", "complete", "validated", "Workspace validation passed."); err != nil {
+		return err
+	}
+	return updateTopLevelState(workspace, "active_layer", "validation")
+}
+
 func appendMethodInvocation(workspace, layer, method, content string) error {
 	path := filepath.Join(workspace, "kkt.yaml")
 	fileContent, err := os.ReadFile(path)
@@ -945,6 +970,38 @@ func appendPlanStateEntry(workspace, artifact, content string) error {
 	}
 	lines = append(lines, "decision_log:")
 	lines = append(lines, entry...)
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func markPlanContractComplete(workspace string) error {
+	path := filepath.Join(workspace, "kkt.yaml")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	fields := map[string]bool{}
+	for _, field := range requiredPlanContractFields() {
+		if field != "planning_contract" {
+			fields[field] = true
+		}
+	}
+	lines := strings.Split(string(content), "\n")
+	activeField := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") && strings.HasSuffix(trimmed, ":") {
+			field := strings.TrimSuffix(trimmed, ":")
+			if fields[field] {
+				activeField = field
+			} else {
+				activeField = ""
+			}
+			continue
+		}
+		if activeField != "" && strings.HasPrefix(strings.TrimSpace(line), "status:") {
+			lines[i] = "    status: complete"
+		}
+	}
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
@@ -1389,6 +1446,28 @@ func nextInstructionForWorkspace(workspace string, state State) string {
 	return nextActionForWorkspace(workspace, state).Instruction
 }
 
+func statusReport(workspace string, state State) (StatusReport, error) {
+	validation, err := ValidateWorkspace(workspace)
+	if err != nil {
+		return StatusReport{}, err
+	}
+	report := StatusReport{
+		SchemaVersion: 1,
+		Workspace:     workspace,
+		Status:        state.Status,
+		ActiveLayer:   state.ActiveLayer,
+		Profile:       state.Profile,
+		Approval:      state.ApprovalStatus,
+		Validation:    validation,
+		StaleComplete: state.Status == "complete" && !validation.OK,
+		Next:          nextActionForWorkspace(workspace, state),
+	}
+	if loop, loopErr := readLoopState(workspace); loopErr == nil {
+		report.CurrentTask = loop.CurrentTask
+	}
+	return report, nil
+}
+
 func continueLayerAction(state State) NextAction {
 	instruction := NextInstruction(state)
 	return NextAction{
@@ -1401,6 +1480,29 @@ func continueLayerAction(state State) NextAction {
 }
 
 func nextActionForWorkspace(workspace string, state State) NextAction {
+	if state.Status == "complete" {
+		validation, err := ValidateWorkspace(workspace)
+		if err == nil && !validation.OK {
+			instruction := "next: repair stale complete state by satisfying validation, then run kkt judge --checkpoint finalize --json and kkt done"
+			requires := []string{"kkt validate", "kkt judge --checkpoint finalize --json", "kkt done"}
+			if hasRequiredValidationCommands(workspace) {
+				instruction = "next: run kkt validate --run, then kkt judge --checkpoint finalize --json and kkt done"
+				requires[0] = "kkt validate --run"
+			}
+			return NextAction{
+				SchemaVersion: 1,
+				Action:        "repair_invalid_completion",
+				Reason:        "stored status is complete but validation is invalid",
+				Blocked:       true,
+				Requires:      requires,
+				Instruction:   instruction,
+			}
+		}
+	}
+	if state.ActiveLayer == "validation" && (state.WorkspaceType == "run" || state.WorkspaceType == "loop") && hasRequiredValidationCommands(workspace) {
+		instruction := "next: run kkt validate --run, then kkt judge --checkpoint finalize --json and kkt done"
+		return NextAction{SchemaVersion: 1, Action: "run_required_validation", Reason: "guardrails define required validation commands", Blocked: false, Requires: []string{"kkt validate --run", "kkt judge --checkpoint finalize --json", "kkt done"}, Instruction: instruction}
+	}
 	if state.WorkspaceType == "run" && state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
 		instruction := "next: show the selected model and record approval with kkt approve before execution"
 		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
@@ -1465,7 +1567,17 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 		}
 	}
 	instruction := "next: run kkt validate, then kkt done when acceptance criteria and evidence are complete"
-	return NextAction{SchemaVersion: 1, Action: "validate_then_done", Reason: "no open tasks or criteria remain", Blocked: false, Requires: []string{"kkt validate", "kkt done"}, Instruction: instruction}
+	requires := []string{"kkt validate", "kkt done"}
+	if hasRequiredValidationCommands(workspace) {
+		instruction = "next: run kkt validate --run, then kkt done when acceptance criteria and evidence are complete"
+		requires[0] = "kkt validate --run"
+	}
+	return NextAction{SchemaVersion: 1, Action: "validate_then_done", Reason: "no open tasks or criteria remain", Blocked: false, Requires: requires, Instruction: instruction}
+}
+
+func hasRequiredValidationCommands(workspace string) bool {
+	commands, err := requiredValidationCommands(workspace)
+	return err == nil && len(commands) > 0
 }
 
 func uniqueTaskID(loop LoopState, base string) string {

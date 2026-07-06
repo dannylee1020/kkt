@@ -20,7 +20,7 @@ Use the `kkt` CLI whenever durable model state is useful. The skill owns modelin
 
 ```text
 kkt start model "<user request>"
-kkt status
+kkt status [--json]
 kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"

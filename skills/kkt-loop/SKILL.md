@@ -20,7 +20,7 @@ Use the `kkt` CLI as the workflow control path. The skill owns reasoning policy;
 
 ```text
 kkt start loop "<user request>"
-kkt status
+kkt status [--json]
 kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
@@ -37,7 +37,7 @@ kkt progress "<progress update>"
 kkt evidence --for <criterion-id> --command "<validation command>" "<validation evidence>"
 kkt task done <task-id>
 kkt criteria satisfy <criterion-id>
-kkt validate
+kkt validate --run
 kkt judge --checkpoint continuation --json
 kkt judge --checkpoint finalize --json
 kkt done
@@ -45,7 +45,7 @@ kkt resume
 kkt replay --check
 ```
 
-If `kkt` is missing, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state.
+If `kkt` is missing, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state. Use `kkt validate --run` when guardrails list required commands; `kkt evidence` records narrative evidence and criterion mapping, not deterministic command proof.
 
 ## Durable State
 
@@ -71,16 +71,16 @@ Loop workspaces use:
 10. Show the final model and wait for explicit approval.
 11. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
 12. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-13. Before each work segment, run `kkt status`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
+13. Before each work segment, run `kkt status --json`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
 14. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
-15. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate`.
+15. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate --run` when required commands exist.
 16. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
 17. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
 
 ## Goal Objective Template
 
 ```text
-Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, guardrails.json, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status, kkt next, kkt judge, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate, and kkt done as the workflow control surface. Re-read state and run the continuation judge before each continuation, re-optimize only when evidence changes feasibility, and stop only for blocking judge results, listed stop conditions, proven acceptance criteria, or explicit user input.
+Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, guardrails.json, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status --json, kkt next, kkt judge, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate --run when required commands exist, and kkt done as the workflow control surface. Re-read state and run the continuation judge before each continuation, re-optimize only when evidence changes feasibility, and stop only for blocking judge results, listed stop conditions, proven acceptance criteria, or explicit user input.
 ```
 
 Do not set a token budget unless the user explicitly provides one.

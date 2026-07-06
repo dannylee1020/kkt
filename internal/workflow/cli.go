@@ -16,7 +16,7 @@ const usageText = `KKT Workflow CLI
 Usage:
   kkt --version
   kkt start plan|model|run|loop <request>
-  kkt status [path]
+  kkt status [--json] [path]
   kkt next [--json] [path]
   kkt show [artifact]
   kkt intent|discovery|model [--method method] [content]
@@ -161,7 +161,11 @@ func runStart(args []string, stdout io.Writer) error {
 }
 
 func runStatus(args []string, stdout io.Writer) error {
-	workspace, err := ResolveWorkspace(".", firstArg(args))
+	jsonOutput, path, err := parseJSONPathArgs("status", args)
+	if err != nil {
+		return err
+	}
+	workspace, err := ResolveWorkspace(".", path)
 	if err != nil {
 		return err
 	}
@@ -169,13 +173,31 @@ func runStatus(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	report, err := statusReport(workspace, state)
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		return writeJSON(stdout, report)
+	}
 	fmt.Fprintf(stdout, "workspace: %s\n", workspace)
 	fmt.Fprintf(stdout, "status: %s\n", state.Status)
 	fmt.Fprintf(stdout, "active_layer: %s\n", state.ActiveLayer)
 	fmt.Fprintf(stdout, "profile: %s\n", state.Profile)
 	fmt.Fprintf(stdout, "approval: %s\n", state.ApprovalStatus)
-	if loop, loopErr := readLoopState(workspace); loopErr == nil && loop.CurrentTask != "" {
-		fmt.Fprintf(stdout, "current_task: %s\n", loop.CurrentTask)
+	if report.CurrentTask != "" {
+		fmt.Fprintf(stdout, "current_task: %s\n", report.CurrentTask)
+	}
+	if report.Validation.OK {
+		fmt.Fprintln(stdout, "validation: valid")
+	} else {
+		fmt.Fprintln(stdout, "validation: invalid")
+		for _, issue := range report.Validation.Issues {
+			fmt.Fprintf(stdout, "- %s\n", issue)
+		}
+	}
+	if report.StaleComplete {
+		fmt.Fprintln(stdout, "stored_status: complete is stale")
 	}
 	return nil
 }
@@ -220,6 +242,9 @@ func runValidate(args []string, stdout io.Writer) error {
 		return err
 	}
 	if result.OK {
+		if err := markValidationLayerComplete(workspace); err != nil {
+			return err
+		}
 		if err := appendValidationEvent(workspace, result); err != nil {
 			return err
 		}

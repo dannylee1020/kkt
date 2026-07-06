@@ -222,12 +222,12 @@ Commands:
 
 ```bash
 kkt start plan|model|run|loop "<request>"
-kkt status
+kkt status [--json]
 kkt next [--json]
 kkt show [artifact]
 kkt guardrails show|set|validate
 kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
-kkt validate
+kkt validate [--run]
 kkt done
 ```
 
@@ -250,6 +250,8 @@ kkt replay --check
 All durable state lives under the project root's `.kkt/`. For plan-tier work, `.kkt/kkt.yaml` can carry the compact planning contract. For model, run, and loop workspaces, Markdown files hold richer context, and `guardrails.json` carries the deterministic drift contract.
 
 For run and loop workspaces, `kkt judge` checks explicit workflow state: approval, validation, replay state, stop conditions, and changed-path bounds. It is deterministic; semantic code-behavior judgment is not claimed as part of the current guardrail layer.
+
+When guardrails list `validation.required_commands`, use `kkt validate --run` to execute and record deterministic command proof. `kkt evidence` records narrative evidence and criterion mapping; it does not satisfy required command proof by itself.
 
 For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and `kkt replay --check` reports drift between the event history and current state without mutating either file.
 

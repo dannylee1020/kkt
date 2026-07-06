@@ -152,7 +152,7 @@ func validationCommandProofIssues(workspace string) []string {
 	for _, command := range commands {
 		proof, ok := proofs[command]
 		if !ok {
-			issues = append(issues, "required command not run: "+command)
+			issues = append(issues, "required command not run: "+command+" (run kkt validate --run)")
 			continue
 		}
 		if proof.Status != "passed" || proof.ExitCode != 0 {
