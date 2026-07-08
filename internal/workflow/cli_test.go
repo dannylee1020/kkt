@@ -284,7 +284,7 @@ func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 	}
 }
 
-func TestRunJudgeBlocksChangedPathOutsideAllowedBounds(t *testing.T) {
+func TestRunJudgeAllowsUnrelatedChangedPathOutsideAllowedBounds(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -317,13 +317,12 @@ func TestRunJudgeBlocksChangedPathOutsideAllowedBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var blocked bytes.Buffer
-	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("pre-mutation judge should block changed files outside allowed paths")
+	var allowed bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &allowed, &bytes.Buffer{}); err != nil {
+		t.Fatalf("unrelated path outside allowed bounds should not block:\n%s", allowed.String())
 	}
-	if text := blocked.String(); !strings.Contains(text, `"drift_type": "path_scope"`) || !strings.Contains(text, "changed path outside allowed bounds: README.md") {
-		t.Fatalf("pre-mutation judge output missing path-scope block:\n%s", text)
+	if text := allowed.String(); !strings.Contains(text, `"verdict": "allow"`) || strings.Contains(text, "changed path outside allowed bounds: README.md") {
+		t.Fatalf("pre-mutation judge should ignore unrelated out-of-scope path:\n%s", text)
 	}
 }
 
@@ -372,7 +371,7 @@ func TestRunJudgeAllowsChangedPathInsideAllowedBounds(t *testing.T) {
 	}
 }
 
-func TestApprovalBaselineAllowsUnchangedPreexistingDirtyPath(t *testing.T) {
+func TestApprovalBaselineAndUnrelatedDirtyPathDoNotBlock(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -416,13 +415,12 @@ func TestApprovalBaselineAllowsUnchangedPreexistingDirtyPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("changed after approval\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	var blocked bytes.Buffer
-	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &blocked, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("changed out-of-scope path after approval should block")
+	var stillAllowed bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &stillAllowed, &bytes.Buffer{}); err != nil {
+		t.Fatalf("changed unrelated out-of-scope path should not block:\n%s", stillAllowed.String())
 	}
-	if text := blocked.String(); !strings.Contains(text, "changed path outside allowed bounds: README.md") {
-		t.Fatalf("pre-mutation judge output missing changed out-of-scope path:\n%s", text)
+	if text := stillAllowed.String(); !strings.Contains(text, `"verdict": "allow"`) || strings.Contains(text, "changed path outside allowed bounds: README.md") {
+		t.Fatalf("pre-mutation judge should ignore changed unrelated out-of-scope path:\n%s", text)
 	}
 }
 
@@ -1065,6 +1063,39 @@ func TestValidateReportsStaleRequiredCommandProof(t *testing.T) {
 	}
 }
 
+func TestValidateIgnoresUnrelatedChangedPathForRequiredCommandProof(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationRunWorkspaceWithBounds(t, []string{"true"}, []string{"internal/workflow/**"}, nil)
+
+	if err := Run([]string{"validate", "--run", "--timeout", "5s"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("unrelated\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"validate"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("validate should ignore unrelated changed path: %v\n%s", err, stdout.String())
+	}
+	if text := stdout.String(); !strings.Contains(text, "valid:") || strings.Contains(text, "required command proof is stale") {
+		t.Fatalf("validate should keep command proof fresh for unrelated change:\n%s", text)
+	}
+}
+
 func TestStatusReportsStaleCompleteWorkspace(t *testing.T) {
 	root := t.TempDir()
 	initGit(t, root)
@@ -1151,12 +1182,17 @@ func startValidationModelWorkspace(t *testing.T, requiredCommands []string) stri
 
 func startValidationRunWorkspace(t *testing.T, requiredCommands []string) string {
 	t.Helper()
+	return startValidationRunWorkspaceWithBounds(t, requiredCommands, []string{"**"}, nil)
+}
+
+func startValidationRunWorkspaceWithBounds(t *testing.T, requiredCommands, allowedPaths, blockedPaths []string) string {
+	t.Helper()
 	commands := [][]string{
 		{"start", "run", "execute", "selected", "model"},
 		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
 		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
-		{"guardrails", "set", testGuardrailsJSONWithCommands("run", []string{"**"}, nil, requiredCommands)},
+		{"guardrails", "set", testGuardrailsJSONWithCommands("run", allowedPaths, blockedPaths, requiredCommands)},
 		{"approve", "Approved validation run"},
 		{"plan", "Run selected validation model."},
 		{"evidence", "Narrative evidence recorded."},
@@ -1210,7 +1246,7 @@ func testGuardrailsJSONWithCommands(executionMode string, allowedPaths, blockedP
 			"evidence_required":   []string{"scope audit confirms only allowed paths changed"},
 		},
 		"drift_policy": map[string]any{
-			"block_on": []string{"missing_approval", "empty_allowed_paths", "changed_path_outside_allowed", "changed_blocked_path", "validation_failed"},
+			"block_on": []string{"missing_approval", "empty_allowed_paths", "changed_blocked_path", "validation_failed"},
 			"warn_on":  []string{},
 		},
 	}

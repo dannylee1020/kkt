@@ -101,7 +101,7 @@ func runValidationCommand(projectRootDir, workspace, command string, timeout tim
 	if err := os.WriteFile(logPath, output.Bytes(), 0o644); err != nil {
 		return validationCommandProof{}, err
 	}
-	fingerprint, err := workingTreeFingerprint(projectRootDir)
+	fingerprint, err := workingTreeFingerprint(projectRootDir, workspace)
 	if err != nil {
 		return validationCommandProof{}, err
 	}
@@ -140,7 +140,7 @@ func validationCommandProofIssues(workspace string) []string {
 	if err != nil {
 		return []string{"could not resolve project root for validation proof: " + err.Error()}
 	}
-	fingerprint, err := workingTreeFingerprint(projectRootDir)
+	fingerprint, err := workingTreeFingerprint(projectRootDir, workspace)
 	if err != nil {
 		return []string{"could not fingerprint working tree for validation proof: " + err.Error()}
 	}
@@ -235,14 +235,24 @@ func markEvidenceRecorded(workspace string) error {
 	return os.WriteFile(path, []byte(next), 0o644)
 }
 
-func workingTreeFingerprint(projectRootDir string) (string, error) {
+func workingTreeFingerprint(projectRootDir, workspace string) (string, error) {
 	changed, err := changedGitPaths(projectRootDir)
 	if err != nil {
 		return "", err
 	}
+	contract, contractErr := readGuardrails(workspace)
+	allowed := []string{}
+	blocked := []string{}
+	if contractErr == nil {
+		allowed = contract.allowedPaths()
+		blocked = contract.blockedPaths()
+	}
 	var entries []string
 	for _, path := range changed {
-		if path == ".kkt" || strings.HasPrefix(path, ".kkt/") {
+		if isKKTPath(path) {
+			continue
+		}
+		if len(allowed) > 0 && !matchesAnyPathPattern(path, allowed) && !matchesAnyPathPattern(path, blocked) {
 			continue
 		}
 		fullPath := filepath.Join(projectRootDir, filepath.FromSlash(path))

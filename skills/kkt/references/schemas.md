@@ -222,7 +222,6 @@ loop_state:
     "block_on": [
       "missing_approval",
       "empty_allowed_paths",
-      "changed_path_outside_allowed",
       "changed_blocked_path",
       "validation_failed"
     ],

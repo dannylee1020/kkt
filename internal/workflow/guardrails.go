@@ -429,7 +429,6 @@ func defaultGuardrailsJSON(request, profile, sourceWorkspace string) string {
 			BlockOn: []string{
 				"missing_approval",
 				"empty_allowed_paths",
-				"changed_path_outside_allowed",
 				"changed_blocked_path",
 				"validation_failed",
 			},
@@ -516,18 +515,21 @@ func changedPathIssues(root, workspace string, contract GuardrailContract) []str
 		issues = append(issues, "approval baseline could not be read: "+baselineErr.Error())
 	}
 	for _, path := range changed {
-		if strings.HasPrefix(path, ".kkt/") || path == ".kkt" {
+		if isKKTPath(path) {
+			continue
+		}
+		if hasBaseline && unchangedFromApprovalBaseline(projectRootDir, baseline, path) {
 			continue
 		}
 		if matchesAnyPathPattern(path, blocked) {
 			issues = append(issues, "changed blocked path: "+path)
 			continue
 		}
+		// Paths outside the modeled allowed bounds are treated as unrelated branch
+		// work. Guardrails enforce the implementation scope and explicit blocks;
+		// they should not require an otherwise clean working tree.
 		if len(allowed) > 0 && !matchesAnyPathPattern(path, allowed) {
-			if hasBaseline && unchangedFromApprovalBaseline(projectRootDir, baseline, path) {
-				continue
-			}
-			issues = append(issues, "changed path outside allowed bounds: "+path)
+			continue
 		}
 	}
 	return issues
@@ -548,7 +550,7 @@ func writeApprovalBaseline(workspace string) error {
 		Paths:         map[string]string{},
 	}
 	for _, path := range changed {
-		if strings.HasPrefix(path, ".kkt/") || path == ".kkt" {
+		if isKKTPath(path) {
 			continue
 		}
 		fingerprint, err := pathFingerprint(projectRootDir, path)
@@ -589,6 +591,11 @@ func unchangedFromApprovalBaseline(projectRootDir string, baseline ApprovalBasel
 	}
 	currentFingerprint, err := pathFingerprint(projectRootDir, path)
 	return err == nil && currentFingerprint == approvedFingerprint
+}
+
+func isKKTPath(path string) bool {
+	path = normalizeRepoPath(path)
+	return path == ".kkt" || strings.HasPrefix(path, ".kkt/")
 }
 
 func pathFingerprint(projectRootDir, path string) (string, error) {

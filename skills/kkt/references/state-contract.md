@@ -68,9 +68,9 @@ When `guardrails.json` lists `validation.required_commands`, run or loop workspa
 ## Judge Checkpoints
 
 - `model-ready`: before implementation; blocks run/loop execution when model, guardrails, or allowed path bounds are incomplete.
-- `pre-mutation`: before edits or side effects; blocks when approval is missing or changed paths violate bounds.
+- `pre-mutation`: before edits or side effects; blocks when approval is missing or explicitly blocked paths changed; unrelated dirty paths outside allowed bounds are ignored.
 - `continuation`: before loop continuation; blocks on active stop conditions or replay drift.
-- `finalize`: before `kkt done`; blocks when validation fails or current git changes violate path bounds.
-- `pre-tool`, `post-tool`, `pre-compact`, `post-compact`: portable hook names for adapters.
+- `finalize`: before `kkt done`; blocks when validation fails or explicitly blocked paths changed; unrelated dirty paths outside allowed bounds are ignored.
+- `pre-tool`, `post-tool`, `pre-compact`, `post-compact`: portable hook names for adapters; enforce explicit blocked paths without requiring a clean worktree.
 
 Treat `block` as a hard stop. Treat `warn` as a contract-quality issue to repair before risky work. Treat `allow` as permission to continue to the next workflow step.
