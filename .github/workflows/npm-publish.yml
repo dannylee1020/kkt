@@ -1,0 +1,47 @@
+name: Publish npm package
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify package version matches release tag
+        run: |
+          set -euo pipefail
+          release_tag="${{ github.event.release.tag_name }}"
+          release_version="${release_tag#v}"
+          package_version="$(node -p "require('./package.json').version")"
+          if [ "$package_version" != "$release_version" ]; then
+            echo "package.json version ($package_version) must match release tag ($release_tag -> $release_version)" >&2
+            exit 1
+          fi
+
+      - name: Check package
+        run: |
+          set -euo pipefail
+          node --check bin/kkt-install.mjs
+          node bin/kkt-install.mjs doctor
+          npm pack --dry-run
+
+      - name: Publish package
+        run: npm publish --access public --provenance

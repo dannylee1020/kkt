@@ -1,3 +1,5 @@
 memory/
 dist/
 .kkt/
+.npmrc
+*.tgz
