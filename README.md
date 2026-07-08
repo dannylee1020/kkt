@@ -64,18 +64,18 @@ kkt does not implement a literal numerical solver. It borrows the discipline of 
 
 ## Install
 
-Recommended full install via npm:
+Recommended install:
 
 ```bash
 npx @dannylee1020/kkt install --target all
 ```
 
-This installs KKT for all detected supported agents:
+This installs kkt skills for every supported agent it can find:
 
 - Claude Code: `~/.claude/skills`
 - Codex, Pi, and OpenCode: `~/.agents/skills`
--
-Install for one agent:
+
+Install for one agent instead:
 
 ```bash
 npx @dannylee1020/kkt install --target claude
@@ -84,18 +84,25 @@ npx @dannylee1020/kkt install --target pi
 npx @dannylee1020/kkt install --target opencode
 ```
 
-Upgrade or customize the CLI location:
+Upgrade kkt:
 
 ```bash
 npx @dannylee1020/kkt upgrade --target all
+```
+
+Choose a CLI install location:
+
+```bash
 npx @dannylee1020/kkt install --bin-dir ~/.local/bin
 ```
+
+Alternative shell installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
 ```
 
-The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
+The CLI uses a release binary when available, or builds from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
 
 ## Why KKT
 
@@ -129,25 +136,25 @@ For coding agents, "what must stay true" is usually concrete:
 the value is forcing feasibility before optimization: reject plans that violate hard constraints, compare the remaining plans, choose the best feasible path, then validate against the model.
 
 
-## KKT and Plan Mode
+## kkt vs plan mode
 
-KKT supports two realistic entry paths.
+kkt can replace plan mode, or it can run after plan mode to harden a rough plan. Plan mode sketches the path; kkt checks that path against repo facts, constraints, and validation proof before edits.
 
-Use KKT directly when you want it to substitute for default plan mode. In this path, KKT owns intent capture, discovery, feasibility checks, selected implementation model, approval, execution, and validation proof.
+| question | plan mode | kkt |
+| --- | --- | --- |
+| What is it optimizing for? | Coordination and sequencing | Best feasible implementation |
+| What comes before edits? | A step list | Goal, constraints, chosen path, validation proof |
+| How are assumptions handled? | Often left in the plan | Verified or marked as assumptions |
+| When is it enough? | Small, low-risk work | Work where boundaries, contracts, or validation matter |
+| Where does state live? | Usually chat context | Chat-first; optional `.kkt/` state when useful |
 
-Use KKT after plan mode when a default plan already exists. In this path, the prior plan is useful scaffolding, but it is not a contract. KKT extracts whatever is useful, classifies claims as user input, assumptions, discoverable facts, candidate decisions, candidate constraints, or candidate validation, then verifies repo facts before turning them into the optimized model.
-
-kkt answers: "Which implementation is optimal inside these constraints?"
-
-| plan mode | kkt |
+| situation | use |
 | --- | --- |
-| discovery, preliminary findings, and sequencing | deeper implementation model around constraints |
-| may describe steps before formal feasibility checks | requires objective, constraints, decision variables, and selected feasible path |
-| often lives in the chat context | can persist workflow state under project-root `.kkt/` when useful |
-| validates after implementation | defines validation proof before implementation |
-| good for lightweight coordination | useful when correctness depends on preserving boundaries |
+| You just need quick coordination | Plan mode |
+| You want guardrails before changing code | Start with kkt |
+| You already have a rough plan | Run kkt after plan mode to verify facts and rebuild the contract |
 
-Use plan mode or KKT interchangeably when the task is small and low-risk. For more complex work, either start directly with KKT or start in plan mode to surface context and preliminary options, then ask the agent to use KKT to optimize the implementation path against the constraints. KKT cannot control a host agent's internal plan-mode output; it can only consume that output, verify it, and rebuild the contract inside KKT.
+Plan mode asks, "What should we do?" kkt asks, "What is the best feasible implementation, given what must stay true?"
 
 ## Quick Start
 
