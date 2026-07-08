@@ -64,26 +64,35 @@ kkt does not implement a literal numerical solver. It borrows the discipline of 
 
 ## Install
 
-Install KKT with the script installer:
+Recommended full install via npm:
+
+```bash
+npx @dannylee1020/kkt install --target all
+```
+
+This installs KKT for all detected supported agents:
+
+- Claude Code: `~/.claude/skills`
+- Codex, Pi, and OpenCode: `~/.agents/skills`
+-
+Install for one agent:
+
+```bash
+npx @dannylee1020/kkt install --target claude
+npx @dannylee1020/kkt install --target codex
+npx @dannylee1020/kkt install --target pi
+npx @dannylee1020/kkt install --target opencode
+```
+
+Upgrade or customize the CLI location:
+
+```bash
+npx @dannylee1020/kkt upgrade --target all
+npx @dannylee1020/kkt install --bin-dir ~/.local/bin
+```
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash
-```
-
-The installer does three things:
-
-- installs the KKT skills into supported coding-agent skill directories
-- installs `ast-grep` for syntax-aware structural discovery when it is missing
-- installs the `kkt` CLI used by those skills for deterministic workflow and validation
-
-Common options:
-
-```bash
-scripts/install.sh --target codex
-scripts/install.sh --target claude
-scripts/install.sh --target all
-scripts/install.sh --bin-dir ~/.local/bin
-scripts/install.sh upgrade
 ```
 
 The CLI is downloaded as a release binary when available, or built from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.

@@ -1,0 +1,45 @@
+{
+  "name": "@dannylee1020/kkt",
+  "version": "0.5.0",
+  "description": "KKT constrained-optimization workflow skills and CLI installer for coding agents.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dannylee1020/kkt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dannylee1020/kkt/issues"
+  },
+  "homepage": "https://github.com/dannylee1020/kkt#readme",
+  "keywords": [
+    "pi-package",
+    "agent-skills",
+    "coding-agent",
+    "claude-code",
+    "codex",
+    "opencode",
+    "pi",
+    "kkt"
+  ],
+  "bin": {
+    "kkt-install": "bin/kkt-install.mjs"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ],
+    "image": "https://raw.githubusercontent.com/dannylee1020/kkt/main/assets/kkt-readme-modern.png"
+  },
+  "files": [
+    "assets/",
+    "bin/",
+    "cmd/",
+    "internal/",
+    "scripts/",
+    "skills/",
+    "go.mod",
+    "README.md",
+    "LICENSE"
+  ]
+}
