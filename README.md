@@ -25,10 +25,10 @@ request --> agent --> plan --> edits --> validation
 
 With KKT:
 
-request --> agent --> (model constraints --> model optimized path) --> edits --> validation
-                                          |
-                                          v
-                         objective + decision variables + proof
+request --> agent --> kkt(optimization modeling) --> edits --> validation
+                                 |
+                                 v
+         objective + constraints + decision variables + proof
 ```
 
 
