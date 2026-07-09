@@ -145,14 +145,8 @@ kkt can replace plan mode, or it can run after plan mode to harden a rough plan.
 | What is it optimizing for? | Coordination and sequencing | Best feasible implementation |
 | What comes before edits? | A step list | Goal, constraints, chosen path, validation proof |
 | How are assumptions handled? | Often left in the plan | Verified or marked as assumptions |
-| When is it enough? | Small, low-risk work | Work where boundaries, contracts, or validation matter |
+| When is it enough? | Small to medium work | Work where boundaries, contracts, or validation matter |
 | Where does state live? | Usually chat context | Chat-first; optional `.kkt/` state when useful |
-
-| situation | use |
-| --- | --- |
-| You just need quick coordination | Plan mode |
-| You want guardrails before changing code | Start with kkt |
-| You already have a rough plan | Run kkt after plan mode to verify facts and rebuild the contract |
 
 Plan mode asks, "What should we do?" kkt asks, "What is the best feasible implementation, given what must stay true?"
 
