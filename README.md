@@ -281,21 +281,7 @@ Coding agents such as Codex, Claude Code, Pi, and OpenCode can run hooks around 
 Before and after tool execution, the adapter asks the current project whether the proposed or actual file mutation stays inside modeled `allowed_paths` and away from `blocked_paths`. If hooks are not installed or not armed, normal agent behavior is unchanged. If hooks are armed, out-of-scope edits can be blocked deterministically instead of relying only on the agent to remember checkpoints.
 
 > [!WARNING]
-> Hooks are beta and installed separately because they modify coding-agent runtime behavior. They are inert until a project explicitly arms them.
-
-Install hook adapters separately. By default, the installer detects supported coding agents and installs the matching adapter; pass `--target codex`, `--target claude`, `--target pi`, `--target opencode`, or `--target all` to override detection.
-
-```bash
-npx @dannylee1020/kkt install --hooks
-```
-
-Codex users may need to review and trust the installed hook with `/hooks` before Codex runs it.
-
-Arm hooks only after approving a run or loop workspace:
-
-```bash
-kkt hooks arm --mode enforce
-```
+> Hooks are beta and installed separately because they modify coding-agent runtime behavior. 
 
 ## License
 
