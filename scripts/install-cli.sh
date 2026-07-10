@@ -11,7 +11,7 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install-cli.sh | bash -s -- [options]
   curl -fsSL <install-cli.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [options]
 
-Installs the Go kkt CLI. KKT skills can use this binary for deterministic
+Installs the Go kkt CLI. KKT skills can use this binary for optional or durable
 .kkt state scaffolding, status, next-step hints, and validation.
 
 Options:

@@ -8,15 +8,21 @@ license: Apache-2.0
 
 Use this skill for ordinary coding work that needs stricter planning than default plan mode. Apply constrained optimization as a discipline: choose the best feasible implementation given what must stay true.
 
-Read `references/kkt-kernel.md` before acting. Read `references/feature-optimization-model.md` when building the compact model. Read `references/state-contract.md` only when durable state is useful. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during non-trivial discovery or structural search. Read `references/layered-modeling-methods.md` only when method selection beyond the plan profile is needed. Read `references/schemas.md` only when a full copyable state, guardrail, or layer-output shape is needed.
+Read `references/kkt-kernel.md` before acting. Read `references/feature-optimization-model.md` when building the compact model. Read `references/state-contract.md` only when optional plan-tier durable state is explicitly needed. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during non-trivial discovery or structural search. Read `references/layered-modeling-methods.md` only when method selection beyond the plan profile is needed. Read `references/schemas.md` only when a full copyable state, guardrail, or layer-output shape is needed.
 
 ## Core Rule
 
 Intake before modeling. Discovery before asking for repo facts. Model before editing. Show the final modeling result and get explicit user approval before implementation. Finish only with validation evidence or an explicit blocker.
 
-## CLI-First Workflow
+## Persistence Policy
 
-Use the `kkt` CLI whenever durable state is useful. The skill owns reasoning policy; the CLI owns state creation, reads, mutation, approval, evidence, validation, and completion.
+Default to no durable `.kkt/` state for `$kkt`. For ordinary coding work, keep the compact model, approval, execution notes, validation evidence, and final audit in the conversation.
+
+Use optional plan-tier persistence only when the user explicitly asks for durable state, handoff/resume support is needed, or validation/evidence must survive across turns while the task still fits the lightweight `$kkt` profile. If the work needs rich durable artifacts, guardrails, task queues, continuation, deep option modeling, or deterministic drift checks, do not stretch `$kkt`; switch to `$kkt-model`, `$kkt-run`, or `$kkt-loop` as appropriate.
+
+## Optional Durable Plan-Tier Workflow
+
+When optional plan-tier persistence is justified, use the `kkt` CLI. The skill owns reasoning policy; the CLI owns state creation, reads, mutation, approval, evidence, validation, and completion.
 
 ```text
 kkt start plan "<user request>"
@@ -29,7 +35,7 @@ kkt validate [--run]
 kkt done
 ```
 
-If `kkt` is missing and durable state is needed, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state. Use `kkt validate --run` when guardrails define required commands; `kkt evidence` alone is narrative evidence, not command proof.
+If `kkt` is missing and optional durable plan-tier state is required, stop and ask the user to install or upgrade KKT. Do not hand-write replacement state. Use `kkt validate --run` when guardrails define required commands; `kkt evidence` alone is narrative evidence, not command proof.
 
 ## Workflow
 
@@ -46,7 +52,7 @@ If `kkt` is missing and durable state is needed, stop and ask the user to instal
 
 ## Output Discipline
 
-For small tasks, keep the model brief and avoid durable state unless it helps. For durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Load full schemas only when writing or auditing durable state. Switch to `$kkt-model` for deeper non-mutating modeling, `$kkt-run` to implement a completed model with guardrails, or `$kkt-loop` for long-running continuation.
+For ordinary `$kkt` tasks, keep the model brief and do not create durable state by default. For optional durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Load full schemas only when writing or auditing durable state. Switch to `$kkt-model` for deeper non-mutating modeling, `$kkt-run` to implement a completed model with guardrails, or `$kkt-loop` for long-running continuation.
 
 Before implementation, expose a compact optimized plan: objective function, known constraints, files to modify, constraint functions, decision variables, selected plan, rejected alternatives, binding constraints, validation proof plan, and residual risk. Keep formal method names hidden unless they explain a material tradeoff.
 

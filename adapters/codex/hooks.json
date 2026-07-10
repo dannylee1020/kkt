@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "kkt hook pre-tool --agent codex",
+            "statusMessage": "Checking KKT guardrails"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "kkt hook post-tool --agent codex",
+            "statusMessage": "Checking KKT guardrails"
+          }
+        ]
+      }
+    ]
+  }
+}

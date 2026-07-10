@@ -25,6 +25,7 @@ kkt show model
 kkt guardrails validate
 kkt judge --checkpoint model-ready --json
 kkt approve "<approved scope>"
+kkt hooks arm --mode enforce
 kkt judge --checkpoint pre-mutation --json
 kkt plan "<execution contract>"
 kkt progress "<progress update>"
@@ -44,14 +45,15 @@ If no completed model workspace exists, switch back to `$kkt-model` instead of i
 4. Confirm whether the selected model used plan assimilation. Preserve the model's classification of prior-plan claims and do not promote unverified prior-plan assumptions during execution.
 5. Show the user the execution contract: selected model, hard constraints, allowed paths, blocked paths, validation commands, and residual risk.
 6. Get explicit approval and record it with `kkt approve`.
-7. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
-8. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility.
-9. Record progress and validation evidence with CLI commands. Use `kkt evidence` for narrative evidence, not as deterministic command proof.
-10. Run `kkt validate --run` when guardrails list required commands, then run `kkt judge --checkpoint finalize --json` before `kkt done`.
+7. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval to enable project-local deterministic hook enforcement for this workspace. Hooks are off by default and auto-disarm on `kkt done` or `kkt block`.
+8. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks missing approval and explicitly blocked-path drift while ignoring unrelated unchanged branch work outside `allowed_paths`. When hooks are armed, hook baseline checks additionally block new post-approval mutations outside `allowed_paths`.
+9. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility.
+10. Record progress and validation evidence with CLI commands. Use `kkt evidence` for narrative evidence, not as deterministic command proof.
+11. Run `kkt validate --run` when guardrails list required commands, then run `kkt judge --checkpoint finalize --json` before `kkt done`.
 
 ## Stop Conditions
 
-Stop before editing when the model-ready checkpoint blocks, guardrails are missing or invalid for the intended change, approval is missing, changed files are outside allowed paths, changed files hit blocked paths, the selected model no longer matches repo facts, destructive action is required, credentials/secrets/external access/paid services are required, or implementation would expand beyond the model.
+Stop before editing when the model-ready checkpoint blocks, guardrails are missing or invalid for the intended change, approval is missing, hook baseline checks show post-approval mutations outside allowed paths, changed files hit blocked paths, the selected model no longer matches repo facts, destructive action is required, credentials/secrets/external access/paid services are required, or implementation would expand beyond the model.
 
 ## Do Not
 

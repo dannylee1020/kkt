@@ -31,6 +31,7 @@ kkt plan "<execution contract>"
 kkt criteria add "<acceptance criterion>"
 kkt task add "<task>"
 kkt approve "<approved scope>"
+kkt hooks arm --mode enforce
 kkt judge --checkpoint pre-mutation --json
 kkt task start <task-id>
 kkt progress "<progress update>"
@@ -70,17 +71,18 @@ Loop workspaces use:
 9. Run `kkt guardrails validate` and `kkt judge --checkpoint model-ready --json`; repair or stop on any blocking result.
 10. Show the final model and wait for explicit approval.
 11. After approval, record the plan with CLI commands, add criteria/tasks, and record approval.
-12. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-13. Before each work segment, run `kkt status --json`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
-14. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks if existing git changes are outside `allowed_paths` or inside `blocked_paths`.
-15. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate --run` when required commands exist.
-16. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
-17. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
+12. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval to enable project-local deterministic hook enforcement for this workspace. Hooks are off by default and auto-disarm on `kkt done` or `kkt block`.
+13. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
+14. Before each work segment, run `kkt status --json`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
+15. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks missing approval and explicitly blocked-path drift while ignoring unrelated unchanged branch work outside `allowed_paths`. When hooks are armed, hook baseline checks additionally block new post-approval mutations outside `allowed_paths`.
+16. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate --run` when required commands exist.
+17. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
+18. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit.
 
 ## Goal Objective Template
 
 ```text
-Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, guardrails.json, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status --json, kkt next, kkt judge, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate --run when required commands exist, and kkt done as the workflow control surface. Re-read state and run the continuation judge before each continuation, re-optimize only when evidence changes feasibility, and stop only for blocking judge results, listed stop conditions, proven acceptance criteria, or explicit user input.
+Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, guardrails.json, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status --json, kkt next, kkt judge, kkt hooks arm when hook adapters are installed, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate --run when required commands exist, and kkt done as the workflow control surface. Re-read state and run the continuation judge before each continuation, re-optimize only when evidence changes feasibility, and stop only for blocking judge results, listed stop conditions, proven acceptance criteria, or explicit user input.
 ```
 
 Do not set a token budget unless the user explicitly provides one.

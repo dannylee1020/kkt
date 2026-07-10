@@ -19,13 +19,14 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/install.sh | bash -s -- upgrade [installer options]
   curl -fsSL <install.sh-url> | KKT_INSTALL_URL=<archive-url> bash -s -- [installer options]
 
-Installs KKT skills, ast-grep, and the companion kkt CLI used for durable state.
+Installs KKT skills, ast-grep, and the companion kkt CLI used for optional and durable workflow state.
 
 Common options:
   --target <name>   auto | codex | claude | pi | opencode | all
   --local [path]    Install to project-local skill directories. Defaults to cwd.
   --dir <path>      Install to an explicit skill root directory.
   --bin-dir <path>  Install the kkt CLI here. Defaults to ~/.local/bin.
+  --hooks           Install inert agent hook adapters. Enforcement stays off until kkt hooks arm.
   --force           Overwrite existing KKT skill directories during install.
   --dry-run         Print operations without writing files.
   --help, -h        Show this help.
@@ -38,6 +39,9 @@ Commands:
 
 Environment:
   KKT_BUILD_FROM_SOURCE  Build the CLI from source without downloading a release binary.
+
+Hook adapters are opt-in and no-op by default. They call `kkt hook ...`, which only enforces
+when the current project has an armed `.kkt/hooks.json`.
 
 Default install auto-detects supported coding agents and writes to:
   ~/.agents/skills   (Codex, Pi, OpenCode)
@@ -271,6 +275,7 @@ parse_args() {
   bin_dir="${KKT_BIN_DIR:-$HOME/.local/bin}"
   force="false"
   dry_run="false"
+  install_hooks="false"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -297,6 +302,10 @@ parse_args() {
         [ "$#" -ge 2 ] || fail "--bin-dir requires a value."
         bin_dir="$(expand_home "$2")"
         shift 2
+        ;;
+      --hooks)
+        install_hooks="true"
+        shift
         ;;
       --force)
         force="true"
@@ -603,6 +612,365 @@ uninstall_cli() {
   fi
 }
 
+hooks_root_for_target() {
+  local target_name="$1"
+  local project_root
+  project_root="$(absolute_path "$local_path")"
+  case "$target_name" in
+    pi)
+      if [ "$local_install" = "true" ]; then
+        printf '%s/.pi/extensions\n' "$project_root"
+      else
+        printf '%s/.pi/agent/extensions\n' "$HOME"
+      fi
+      ;;
+    opencode)
+      if [ "$local_install" = "true" ]; then
+        printf '%s/.opencode/plugins\n' "$project_root"
+      else
+        printf '%s/.config/opencode/plugins\n' "$HOME"
+      fi
+      ;;
+    claude)
+      if [ "$local_install" = "true" ]; then
+        printf '%s/.claude/settings.local.json\n' "$project_root"
+      else
+        printf '%s/.claude/settings.json\n' "$HOME"
+      fi
+      ;;
+    codex)
+      if [ "$local_install" = "true" ]; then
+        printf '%s/.codex/hooks.json\n' "$project_root"
+      else
+        printf '%s/.codex/hooks.json\n' "$HOME"
+      fi
+      ;;
+    *) fail "Unsupported hook target: $target_name" ;;
+  esac
+}
+
+copy_hook_adapter() {
+  local source="$1"
+  local dest="$2"
+  local label="$3"
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks %s: would install %s\n' "$label" "$dest"
+    return
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -- "$source" "$dest"
+  printf 'hooks %s: installed %s\n' "$label" "$dest"
+}
+
+install_claude_hooks() {
+  local settings_path="$1"
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks claude: would update %s\n' "$settings_path"
+    return
+  fi
+  command_exists python3 || fail "python3 is required to merge Claude hook settings."
+  mkdir -p "$(dirname "$settings_path")"
+  python3 - "$settings_path" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except FileNotFoundError:
+    data = {}
+if not isinstance(data, dict):
+    raise SystemExit(f"Claude settings must be a JSON object: {path}")
+
+def add_hook(event, matcher, command):
+    hooks = data.setdefault("hooks", {})
+    groups = hooks.setdefault(event, [])
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        if group.get("matcher") != matcher:
+            continue
+        for handler in group.get("hooks", []):
+            if isinstance(handler, dict) and handler.get("type") == "command" and handler.get("command") == command:
+                return
+    groups.append({"matcher": matcher, "hooks": [{"type": "command", "command": command}]})
+
+matcher = "Bash|Edit|MultiEdit|Write|NotebookEdit"
+add_hook("PreToolUse", matcher, "kkt hook pre-tool --agent claude")
+add_hook("PostToolUse", matcher, "kkt hook post-tool --agent claude")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+  printf 'hooks claude: installed %s\n' "$settings_path"
+}
+
+uninstall_claude_hooks() {
+  local settings_path="$1"
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks claude: would remove KKT hooks from %s\n' "$settings_path"
+    return
+  fi
+  [ -f "$settings_path" ] || return
+  command_exists python3 || fail "python3 is required to merge Claude hook settings."
+  python3 - "$settings_path" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+if not isinstance(data, dict):
+    raise SystemExit(0)
+commands = {"kkt hook pre-tool --agent claude", "kkt hook post-tool --agent claude"}
+hooks = data.get("hooks")
+if isinstance(hooks, dict):
+    for event, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        next_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                next_groups.append(group)
+                continue
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                next_groups.append(group)
+                continue
+            group["hooks"] = [h for h in handlers if not (isinstance(h, dict) and h.get("command") in commands)]
+            if group["hooks"]:
+                next_groups.append(group)
+        if next_groups:
+            hooks[event] = next_groups
+        else:
+            hooks.pop(event, None)
+    if not hooks:
+        data.pop("hooks", None)
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+  printf 'hooks claude: removed KKT hooks from %s\n' "$settings_path"
+}
+
+codex_config_has_inline_hooks() {
+  local config_path="$1"
+  [ -f "$config_path" ] && grep -Eq '^[[:space:]]*\[\[?hooks(\.|\])' "$config_path"
+}
+
+install_codex_toml_hooks() {
+  local config_path="$1"
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks codex: would update %s\n' "$config_path"
+    return
+  fi
+  command_exists python3 || fail "python3 is required to merge Codex hook settings."
+  mkdir -p "$(dirname "$config_path")"
+  python3 - "$config_path" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+try:
+    text = open(path, "r", encoding="utf-8").read()
+except FileNotFoundError:
+    text = ""
+text = re.sub(r"\n?# kkt-hooks:start\n.*?# kkt-hooks:end\n?", "\n", text, flags=re.S)
+block = '''# kkt-hooks:start
+[[hooks.PreToolUse]]
+matcher = "Bash|apply_patch|Edit|Write"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "kkt hook pre-tool --agent codex"
+statusMessage = "Checking KKT guardrails"
+
+[[hooks.PostToolUse]]
+matcher = "Bash|apply_patch|Edit|Write"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = "kkt hook post-tool --agent codex"
+statusMessage = "Checking KKT guardrails"
+# kkt-hooks:end
+'''
+text = text.rstrip() + "\n\n" + block
+open(path, "w", encoding="utf-8").write(text)
+PY
+  printf 'hooks codex: installed %s\n' "$config_path"
+}
+
+uninstall_codex_toml_hooks() {
+  local config_path="$1"
+  [ -f "$config_path" ] || return
+  command_exists python3 || fail "python3 is required to merge Codex hook settings."
+  python3 - "$config_path" <<'PY'
+import re
+import sys
+path = sys.argv[1]
+text = open(path, "r", encoding="utf-8").read()
+text = re.sub(r"\n?# kkt-hooks:start\n.*?# kkt-hooks:end\n?", "\n", text, flags=re.S)
+open(path, "w", encoding="utf-8").write(text.rstrip() + "\n")
+PY
+  printf 'hooks codex: removed KKT hooks from %s\n' "$config_path"
+}
+
+install_codex_hooks() {
+  local hooks_path="$1"
+  local config_path
+  config_path="$(dirname "$hooks_path")/config.toml"
+  if codex_config_has_inline_hooks "$config_path"; then
+    install_codex_toml_hooks "$config_path"
+    return
+  fi
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks codex: would update %s\n' "$hooks_path"
+    return
+  fi
+  command_exists python3 || fail "python3 is required to merge Codex hook settings."
+  mkdir -p "$(dirname "$hooks_path")"
+  python3 - "$hooks_path" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+except FileNotFoundError:
+    data = {}
+if not isinstance(data, dict):
+    raise SystemExit(f"Codex hooks file must be a JSON object: {path}")
+
+def add_hook(event, matcher, command):
+    hooks = data.setdefault("hooks", {})
+    groups = hooks.setdefault(event, [])
+    for group in groups:
+        if not isinstance(group, dict) or group.get("matcher") != matcher:
+            continue
+        for handler in group.get("hooks", []):
+            if isinstance(handler, dict) and handler.get("type") == "command" and handler.get("command") == command:
+                return
+    groups.append({
+        "matcher": matcher,
+        "hooks": [{
+            "type": "command",
+            "command": command,
+            "statusMessage": "Checking KKT guardrails",
+        }],
+    })
+
+matcher = "Bash|apply_patch|Edit|Write"
+add_hook("PreToolUse", matcher, "kkt hook pre-tool --agent codex")
+add_hook("PostToolUse", matcher, "kkt hook post-tool --agent codex")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+  printf 'hooks codex: installed %s\n' "$hooks_path"
+}
+
+uninstall_codex_hooks() {
+  local hooks_path="$1"
+  local config_path
+  config_path="$(dirname "$hooks_path")/config.toml"
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks codex: would remove KKT hooks from %s\n' "$hooks_path"
+    printf 'hooks codex: would remove KKT hooks from %s\n' "$config_path"
+    return
+  fi
+  if [ -f "$hooks_path" ]; then
+    command_exists python3 || fail "python3 is required to merge Codex hook settings."
+    python3 - "$hooks_path" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+if not isinstance(data, dict):
+    raise SystemExit(0)
+commands = {"kkt hook pre-tool --agent codex", "kkt hook post-tool --agent codex"}
+hooks = data.get("hooks")
+if isinstance(hooks, dict):
+    for event, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        next_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                next_groups.append(group)
+                continue
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                next_groups.append(group)
+                continue
+            group["hooks"] = [h for h in handlers if not (isinstance(h, dict) and h.get("command") in commands)]
+            if group["hooks"]:
+                next_groups.append(group)
+        if next_groups:
+            hooks[event] = next_groups
+        else:
+            hooks.pop(event, None)
+    if not hooks:
+        data.pop("hooks", None)
+if data:
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
+else:
+    os.remove(path)
+PY
+    printf 'hooks codex: removed KKT hooks from %s\n' "$hooks_path"
+  fi
+  uninstall_codex_toml_hooks "$config_path"
+}
+
+install_hook_adapters() {
+  resolve_targets
+  local native dest
+  for native in "${resolved_targets[@]}"; do
+    dest="$(hooks_root_for_target "$native")"
+    case "$native" in
+      pi) copy_hook_adapter "$root/adapters/pi/kkt-hooks.ts" "$dest/kkt-hooks.ts" "pi" ;;
+      opencode) copy_hook_adapter "$root/adapters/opencode/kkt-hooks.ts" "$dest/kkt-hooks.ts" "opencode" ;;
+      claude) install_claude_hooks "$dest" ;;
+      codex) install_codex_hooks "$dest" ;;
+    esac
+  done
+}
+
+uninstall_hook_adapters() {
+  resolve_targets
+  local native dest
+  for native in "${resolved_targets[@]}"; do
+    dest="$(hooks_root_for_target "$native")"
+    case "$native" in
+      pi)
+        if [ "$dry_run" = "true" ]; then
+          printf 'hooks pi: would remove %s\n' "$dest/kkt-hooks.ts"
+        else
+          rm -f -- "$dest/kkt-hooks.ts"
+          printf 'hooks pi: removed %s\n' "$dest/kkt-hooks.ts"
+        fi
+        ;;
+      opencode)
+        if [ "$dry_run" = "true" ]; then
+          printf 'hooks opencode: would remove %s\n' "$dest/kkt-hooks.ts"
+        else
+          rm -f -- "$dest/kkt-hooks.ts"
+          printf 'hooks opencode: removed %s\n' "$dest/kkt-hooks.ts"
+        fi
+        ;;
+      claude) uninstall_claude_hooks "$dest" ;;
+      codex) uninstall_codex_hooks "$dest" ;;
+    esac
+  done
+}
+
 main() {
   parse_args "$@"
   root="$(resolve_root)"
@@ -636,8 +1004,18 @@ main() {
   done
 
   case "$command_name" in
-    install|upgrade) install_cli ;;
-    uninstall) uninstall_cli ;;
+    install|upgrade)
+      install_cli
+      if [ "$install_hooks" = "true" ]; then
+        install_hook_adapters
+      fi
+      ;;
+    uninstall)
+      if [ "$install_hooks" = "true" ]; then
+        uninstall_hook_adapters
+      fi
+      uninstall_cli
+      ;;
   esac
 }
 

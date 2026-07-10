@@ -251,6 +251,9 @@ func runBlock(args []string, stdout io.Writer) error {
 	if err := updateTopLevelState(workspace, "status", "blocked"); err != nil {
 		return err
 	}
+	if err := disarmHooksForWorkspace(workspace); err != nil {
+		return err
+	}
 	loop, err := readLoopState(workspace)
 	if err == nil {
 		loop.StopConditions = append(loop.StopConditions, LoopStopCondition{
@@ -340,6 +343,9 @@ func runDone(args []string, stdout io.Writer) error {
 		summary = "KKT workflow complete."
 	}
 	if err := updateTopLevelState(workspace, "status", "complete"); err != nil {
+		return err
+	}
+	if err := disarmHooksForWorkspace(workspace); err != nil {
 		return err
 	}
 	if err := updateTopLevelState(workspace, "active_layer", "validation"); err != nil {

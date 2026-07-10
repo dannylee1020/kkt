@@ -96,6 +96,12 @@ Choose a CLI install location:
 npx @dannylee1020/kkt install --bin-dir ~/.local/bin
 ```
 
+Optionally, install hooks for more reliable, deterministic guardrail flow. **This feature is still in beta**.
+
+```bash
+npx @dannylee1020/kkt install --hooks
+```
+
 Alternative shell installer:
 
 ```bash
@@ -146,7 +152,7 @@ kkt can replace plan mode, or it can run after plan mode to harden a rough plan.
 | What comes before edits? | A step list | Goal, constraints, chosen path, validation proof |
 | How are assumptions handled? | Often left in the plan | Verified or marked as assumptions |
 | When is it enough? | Small to medium work | Work where boundaries, contracts, or validation matter |
-| Where does state live? | Usually chat context | Chat-first; optional `.kkt/` state when useful |
+| Where does state live? | Usually chat context | `$kkt` is chat-first; durable `.kkt/` state is opt-in or used by deeper workflows |
 
 Plan mode asks, "What should we do?" kkt asks, "What is the best feasible implementation, given what must stay true?"
 
@@ -179,12 +185,11 @@ OpenCode:    ask OpenCode to use the relevant kkt skill
 
 | workflow | use it for | what it produces | durable state |
 | --- | --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | compact model, approval, implementation, validation | optional `.kkt/kkt.yaml` |
+| `$kkt` | normal feature work, bug fixes, and refactors | compact model, approval, implementation, validation | none by default; optional `.kkt/kkt.yaml` only by explicit need |
 | `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/` |
 | `$kkt-run` | implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
 | `$kkt-loop` | long-running or continuation-heavy work | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
 
-KKT is skill-first. The skills are what you invoke from your coding agent. The CLI is the deterministic tool those skills use for `.kkt/` scaffolding, status, guardrails, state persistence, and validation.
 
 kkt turns rough input into an intent frame:
 
@@ -226,44 +231,71 @@ Residual risk: remaining uncertainty
 
 ## CLI and State
 
-Agent uses the cli to persist state across layers, continuation and agent turns.
+Most users do not need to run the CLI directly. The installed skills use it as a deterministic control plane for durable state, guardrails, approval, validation evidence, and workflow progress.
 
-Commands:
-
-```bash
-kkt start plan|model|run|loop "<request>"
-kkt status [--json]
-kkt next [--json]
-kkt show [artifact]
-kkt guardrails show|set|validate
-kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
-kkt validate [--run]
-kkt done
-```
-
-Discovery uses agent tools directly. Use `rg` for broad text and file discovery, then use `ast-grep` for syntax-aware questions such as call sites, imports, handlers, declarations, component patterns, and error-handling shapes. Optional helpers such as `fd`, `ctags`, `tokei`, and repo-native language tools are used when available, but discovery should not be routed through a KKT CLI command.
-
-Advanced workflow commands:
+Reference command groups:
 
 ```bash
-kkt intent|discovery|model --method <method> "<layer output>"
-kkt run from-model [model-workspace]
-kkt evidence --for <criterion-id> --command "<command>" "<validation evidence>"
-kkt criteria add|satisfy|block
-kkt task add|start|done|skip|block
-kkt approve
-kkt block
+# workspace state
+kkt start
+kkt status
+kkt next
+kkt show
 kkt resume
-kkt replay --check
+kkt replay
+
+# workflow artifacts
+kkt intent
+kkt discovery
+kkt model
+kkt plan
+kkt progress
+kkt evidence
+kkt notes
+
+# guardrails and proof
+kkt guardrails
+kkt judge
+kkt validate
+kkt approve
+
+# execution control
+kkt criteria
+kkt task
+kkt block
+kkt done
+
+# beta hook integration
+kkt hooks
+kkt hook
 ```
 
-All durable state lives under the project root's `.kkt/`. For plan-tier work, `.kkt/kkt.yaml` can carry the compact planning contract. For model, run, and loop workspaces, Markdown files hold richer context, and `guardrails.json` carries the deterministic drift contract.
+Run `kkt help` for exact syntax.
 
-For run and loop workspaces, `kkt judge` checks explicit workflow state: approval, validation, replay state, stop conditions, and changed-path bounds. It is deterministic; semantic code-behavior judgment is not claimed as part of the current guardrail layer.
+Ordinary `$kkt` tasks stay chat-first by default. Durable workflow state, when used, lives under the project root's `.kkt/`; deeper `model`, `run`, and `loop` workflows use that directory for artifacts, guardrails, evidence, and replayable progress. Discovery still uses normal agent tools such as search, shell commands, and repo-native language tooling rather than a KKT-specific discovery command.
 
-When guardrails list `validation.required_commands`, use `kkt validate --run` to execute and record deterministic command proof. `kkt evidence` records narrative evidence and criterion mapping; it does not satisfy required command proof by itself.
+## Hooks
 
-For loop workspaces, `kkt.yaml` is the canonical current contract, `events.jsonl` is the append-only audit and resume history, and `kkt replay --check` reports drift between the event history and current state without mutating either file.
+Coding agents such as Codex, Claude Code, Pi, and OpenCode can run hooks around tool use. KKT's hook adapters plug into those agent hook systems so an approved `run` or `loop` workspace can enforce its guardrail boundaries while the agent is editing.
+
+Before and after tool execution, the adapter asks the current project whether the proposed or actual file mutation stays inside modeled `allowed_paths` and away from `blocked_paths`. If hooks are not installed or not armed, normal agent behavior is unchanged. If hooks are armed, out-of-scope edits can be blocked deterministically instead of relying only on the agent to remember checkpoints.
+
+> [!WARNING]
+> Hooks are beta and installed separately because they modify coding-agent runtime behavior. They are inert until a project explicitly arms them.
+
+Install hook adapters separately. By default, the installer detects supported coding agents and installs the matching adapter; pass `--target codex`, `--target claude`, `--target pi`, `--target opencode`, or `--target all` to override detection.
+
+```bash
+npx @dannylee1020/kkt install --hooks
+```
+
+Codex users may need to review and trust the installed hook with `/hooks` before Codex runs it.
+
+Arm hooks only after approving a run or loop workspace:
+
+```bash
+kkt hooks arm --mode enforce
+```
 
 ## License
 

@@ -8,7 +8,7 @@ Load `schemas.md` only when a full `kkt.yaml`, layer output, or `guardrails.json
 
 | Tier | Skill | Durable files | Use when |
 | --- | --- | --- | --- |
-| Plan | `kkt` | none by default; optional `.kkt/kkt.yaml` | ordinary work where Markdown artifacts would be overhead. |
+| Plan | `kkt` | none by default; optional `.kkt/kkt.yaml` only by explicit need | ordinary chat-first work where Markdown artifacts would be overhead; use only for lightweight handoff/resume or turn-spanning evidence. |
 | Model | `kkt-model` | `.kkt/model/<slug>/kkt.yaml`, `intent.md`, `discovery.md`, `model.md`, `guardrails.json` | durable model or decision brief before execution. |
 | Run | `kkt-run` | `.kkt/run/<slug>/kkt.yaml`, imported artifacts, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, `notes.md` | completed model should be implemented now without loop state. |
 | Loop | `kkt-loop` | `.kkt/loop/<slug>/kkt.yaml`, layer artifacts, `guardrails.json`, `plan.md`, `progress.md`, `evidence.md`, `notes.md`, `events.jsonl` | long-running or resumable execution. |
@@ -17,7 +17,7 @@ Durable `.kkt/` paths are rooted at the nearest Git/worktree root. Outside Git, 
 
 ## CLI Ownership
 
-The `kkt` CLI is the canonical mutation interface for KKT state. Skills should use CLI commands for workspace creation, state reads, artifact recording, guardrails, approvals, progress, evidence, validation, and completion.
+The `kkt` CLI is the canonical mutation interface for optional or durable KKT state. Skills should use CLI commands for workspace creation, state reads, artifact recording, guardrails, approvals, progress, evidence, validation, and completion.
 
 - `kkt.yaml`: current status, active layer, method choices, decisions, artifact references, approvals, stop conditions, and summaries.
 - Markdown artifacts: detailed intent, discovery, modeling rationale, execution plan, progress, evidence, and notes.
@@ -37,6 +37,8 @@ kkt start loop "<request>"
 kkt intent|discovery|model --method <method> "<layer output>"
 kkt guardrails show|set|validate
 kkt judge --checkpoint model-ready|pre-mutation|continuation|finalize --json
+kkt hooks status|arm|disarm
+kkt hook pre-tool|post-tool --json
 kkt validate [--run]
 kkt done
 ```

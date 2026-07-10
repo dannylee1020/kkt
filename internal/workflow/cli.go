@@ -25,6 +25,8 @@ Usage:
   kkt notes [content]
   kkt guardrails show|set|validate [content]
   kkt judge --checkpoint checkpoint [--json] [path]
+  kkt hooks status|arm|disarm [--json] [--mode observe|enforce] [--ttl duration]
+  kkt hook pre-tool|post-tool|pre-compact|post-compact|stop [--agent agent] [--json] [payload]
   kkt run from-model [model-workspace]
   kkt approve [scope]
   kkt criteria [add|satisfy|block] [criterion]
@@ -65,6 +67,10 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runGuardrails(args[1:], stdout)
 	case "judge":
 		return runJudge(args[1:], stdout)
+	case "hooks":
+		return runHooks(args[1:], stdout)
+	case "hook":
+		return runHook(args[1:], stdout)
 	case "run":
 		return runRun(args[1:], stdout)
 	case "approve":

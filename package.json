@@ -32,6 +32,7 @@
     "image": "https://raw.githubusercontent.com/dannylee1020/kkt/main/assets/kkt-readme-modern.png"
   },
   "files": [
+    "adapters/",
     "assets/",
     "bin/",
     "cmd/",
