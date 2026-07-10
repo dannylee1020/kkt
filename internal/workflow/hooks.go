@@ -596,7 +596,7 @@ func isDirectMutationTool(toolName string) bool {
 
 func isShellTool(toolName string) bool {
 	name := strings.ToLower(strings.TrimSpace(toolName))
-	return name == "bash" || name == "shell" || name == "exec" || strings.Contains(name, "terminal")
+	return name == "bash" || name == "powershell" || name == "pwsh" || name == "shell" || name == "exec" || strings.Contains(name, "terminal")
 }
 
 func looksMutatingShellCommand(command string) bool {
@@ -674,6 +674,9 @@ func activeHookResult(state HookState, event, verdict, reason string, repair, ev
 }
 
 func writeAgentHookResult(stdout io.Writer, event string, result HookResult) error {
+	if result.Verdict == "warn" {
+		return writeAgentHookWarning(stdout, event, result)
+	}
 	if result.Verdict != "block" {
 		return nil
 	}
@@ -690,6 +693,20 @@ func writeAgentHookResult(stdout io.Writer, event string, result HookResult) err
 		return writeJSON(stdout, payload)
 	}
 	payload := map[string]any{"decision": "block", "reason": result.Reason}
+	if hookEventName != "" {
+		payload["hookSpecificOutput"] = map[string]any{
+			"hookEventName":     hookEventName,
+			"additionalContext": strings.Join(result.Evidence, "\n"),
+		}
+	}
+	return writeJSON(stdout, payload)
+}
+
+func writeAgentHookWarning(stdout io.Writer, event string, result HookResult) error {
+	hookEventName := hookEventName(event)
+	payload := map[string]any{
+		"systemMessage": "KKT hook warning: " + result.Reason,
+	}
 	if hookEventName != "" {
 		payload["hookSpecificOutput"] = map[string]any{
 			"hookEventName":     hookEventName,

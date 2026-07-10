@@ -7,10 +7,10 @@ vars:
 
 tasks:
   install-local:
-    desc: Install local KKT skills and CLI from this checkout
+    desc: Install local KKT skills, CLI, and hook adapters from this checkout
     env:
       KKT_BUILD_FROM_SOURCE: "1"
       KKT_VERSION: "{{.KKT_LOCAL_VERSION}}"
     cmds:
-      - scripts/install.sh upgrade --target {{.KKT_TARGET}} --bin-dir {{.KKT_BIN_DIR}}
+      - scripts/install.sh upgrade --target {{.KKT_TARGET}} --hooks --bin-dir {{.KKT_BIN_DIR}}
       - '{{.KKT_BIN_DIR}}/kkt --version'

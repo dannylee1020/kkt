@@ -684,22 +684,62 @@ except FileNotFoundError:
 if not isinstance(data, dict):
     raise SystemExit(f"Claude settings must be a JSON object: {path}")
 
-def add_hook(event, matcher, command):
+def is_kkt_hook(handler):
+    if not isinstance(handler, dict) or handler.get("type") != "command":
+        return False
+    command = handler.get("command")
+    args = handler.get("args")
+    legacy = {"kkt hook pre-tool --agent claude", "kkt hook post-tool --agent claude"}
+    modern = {
+        ("kkt", ("hook", "pre-tool", "--agent", "claude")),
+        ("kkt", ("hook", "post-tool", "--agent", "claude")),
+    }
+    return command in legacy or (command, tuple(args or [])) in modern
+
+def remove_kkt_hooks():
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return
+    for event, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        next_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                next_groups.append(group)
+                continue
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                next_groups.append(group)
+                continue
+            group["hooks"] = [handler for handler in handlers if not is_kkt_hook(handler)]
+            if group["hooks"]:
+                next_groups.append(group)
+        if next_groups:
+            hooks[event] = next_groups
+        else:
+            hooks.pop(event, None)
+    if not hooks:
+        data.pop("hooks", None)
+
+def add_hook(event, matcher, args):
     hooks = data.setdefault("hooks", {})
     groups = hooks.setdefault(event, [])
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        if group.get("matcher") != matcher:
-            continue
-        for handler in group.get("hooks", []):
-            if isinstance(handler, dict) and handler.get("type") == "command" and handler.get("command") == command:
-                return
-    groups.append({"matcher": matcher, "hooks": [{"type": "command", "command": command}]})
+    groups.append({
+        "matcher": matcher,
+        "hooks": [{
+            "type": "command",
+            "command": "kkt",
+            "args": args,
+            "timeout": 30,
+            "statusMessage": "Checking KKT guardrails",
+        }],
+    })
 
-matcher = "Bash|Edit|MultiEdit|Write|NotebookEdit"
-add_hook("PreToolUse", matcher, "kkt hook pre-tool --agent claude")
-add_hook("PostToolUse", matcher, "kkt hook post-tool --agent claude")
+remove_kkt_hooks()
+matcher = "Bash|PowerShell|Edit|MultiEdit|Write|NotebookEdit"
+add_hook("PreToolUse", matcher, ["hook", "pre-tool", "--agent", "claude"])
+add_hook("PostToolUse", matcher, ["hook", "post-tool", "--agent", "claude"])
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, indent=2)
     handle.write("\n")
@@ -724,7 +764,17 @@ with open(path, "r", encoding="utf-8") as handle:
     data = json.load(handle)
 if not isinstance(data, dict):
     raise SystemExit(0)
-commands = {"kkt hook pre-tool --agent claude", "kkt hook post-tool --agent claude"}
+legacy = {"kkt hook pre-tool --agent claude", "kkt hook post-tool --agent claude"}
+modern = {
+    ("kkt", ("hook", "pre-tool", "--agent", "claude")),
+    ("kkt", ("hook", "post-tool", "--agent", "claude")),
+}
+
+def is_kkt_hook(handler):
+    if not isinstance(handler, dict) or handler.get("type") != "command":
+        return False
+    return handler.get("command") in legacy or (handler.get("command"), tuple(handler.get("args") or [])) in modern
+
 hooks = data.get("hooks")
 if isinstance(hooks, dict):
     for event, groups in list(hooks.items()):
@@ -739,7 +789,7 @@ if isinstance(hooks, dict):
             if not isinstance(handlers, list):
                 next_groups.append(group)
                 continue
-            group["hooks"] = [h for h in handlers if not (isinstance(h, dict) and h.get("command") in commands)]
+            group["hooks"] = [h for h in handlers if not is_kkt_hook(h)]
             if group["hooks"]:
                 next_groups.append(group)
         if next_groups:
@@ -755,56 +805,19 @@ PY
   printf 'hooks claude: removed KKT hooks from %s\n' "$settings_path"
 }
 
-codex_config_has_inline_hooks() {
+codex_config_has_kkt_toml_hooks() {
   local config_path="$1"
-  [ -f "$config_path" ] && grep -Eq '^[[:space:]]*\[\[?hooks(\.|\])' "$config_path"
-}
-
-install_codex_toml_hooks() {
-  local config_path="$1"
-  if [ "$dry_run" = "true" ]; then
-    printf 'hooks codex: would update %s\n' "$config_path"
-    return
-  fi
-  command_exists python3 || fail "python3 is required to merge Codex hook settings."
-  mkdir -p "$(dirname "$config_path")"
-  python3 - "$config_path" <<'PY'
-import re
-import sys
-
-path = sys.argv[1]
-try:
-    text = open(path, "r", encoding="utf-8").read()
-except FileNotFoundError:
-    text = ""
-text = re.sub(r"\n?# kkt-hooks:start\n.*?# kkt-hooks:end\n?", "\n", text, flags=re.S)
-block = '''# kkt-hooks:start
-[[hooks.PreToolUse]]
-matcher = "Bash|apply_patch|Edit|Write"
-
-[[hooks.PreToolUse.hooks]]
-type = "command"
-command = "kkt hook pre-tool --agent codex"
-statusMessage = "Checking KKT guardrails"
-
-[[hooks.PostToolUse]]
-matcher = "Bash|apply_patch|Edit|Write"
-
-[[hooks.PostToolUse.hooks]]
-type = "command"
-command = "kkt hook post-tool --agent codex"
-statusMessage = "Checking KKT guardrails"
-# kkt-hooks:end
-'''
-text = text.rstrip() + "\n\n" + block
-open(path, "w", encoding="utf-8").write(text)
-PY
-  printf 'hooks codex: installed %s\n' "$config_path"
+  [ -f "$config_path" ] && grep -q '# kkt-hooks:start' "$config_path"
 }
 
 uninstall_codex_toml_hooks() {
   local config_path="$1"
   [ -f "$config_path" ] || return
+  codex_config_has_kkt_toml_hooks "$config_path" || return
+  if [ "$dry_run" = "true" ]; then
+    printf 'hooks codex: would remove legacy KKT hooks from %s\n' "$config_path"
+    return
+  fi
   command_exists python3 || fail "python3 is required to merge Codex hook settings."
   python3 - "$config_path" <<'PY'
 import re
@@ -814,21 +827,19 @@ text = open(path, "r", encoding="utf-8").read()
 text = re.sub(r"\n?# kkt-hooks:start\n.*?# kkt-hooks:end\n?", "\n", text, flags=re.S)
 open(path, "w", encoding="utf-8").write(text.rstrip() + "\n")
 PY
-  printf 'hooks codex: removed KKT hooks from %s\n' "$config_path"
+  printf 'hooks codex: removed legacy KKT hooks from %s\n' "$config_path"
 }
 
 install_codex_hooks() {
   local hooks_path="$1"
   local config_path
   config_path="$(dirname "$hooks_path")/config.toml"
-  if codex_config_has_inline_hooks "$config_path"; then
-    install_codex_toml_hooks "$config_path"
-    return
-  fi
   if [ "$dry_run" = "true" ]; then
     printf 'hooks codex: would update %s\n' "$hooks_path"
+    uninstall_codex_toml_hooks "$config_path"
     return
   fi
+  uninstall_codex_toml_hooks "$config_path"
   command_exists python3 || fail "python3 is required to merge Codex hook settings."
   mkdir -p "$(dirname "$hooks_path")"
   python3 - "$hooks_path" <<'PY'

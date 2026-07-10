@@ -2,22 +2,28 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|MultiEdit|Write|NotebookEdit",
+        "matcher": "Bash|PowerShell|Edit|MultiEdit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "kkt hook pre-tool --agent claude"
+            "command": "kkt",
+            "args": ["hook", "pre-tool", "--agent", "claude"],
+            "timeout": 30,
+            "statusMessage": "Checking KKT guardrails"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash|Edit|MultiEdit|Write|NotebookEdit",
+        "matcher": "Bash|PowerShell|Edit|MultiEdit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "kkt hook post-tool --agent claude"
+            "command": "kkt",
+            "args": ["hook", "post-tool", "--agent", "claude"],
+            "timeout": 30,
+            "statusMessage": "Checking KKT guardrails"
           }
         ]
       }

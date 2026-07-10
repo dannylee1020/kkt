@@ -113,9 +113,18 @@ func TestHooksObserveWarnsInsteadOfBlocking(t *testing.T) {
 	startValidationRunWorkspaceWithBounds(t, nil, []string{"src/**"}, []string{".env*"})
 	armHooksForTest(t, "observe")
 
-	result := runHookJSON(t, "pre-tool", `{"tool_name":"write","tool_input":{"path":"docs/out.md"}}`)
+	payload := `{"tool_name":"write","tool_input":{"path":"docs/out.md"}}`
+	result := runHookJSON(t, "pre-tool", payload)
 	if result.Verdict != "warn" || result.Mode != "observe" {
 		t.Fatalf("observe mode should warn instead of block: %#v", result)
+	}
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"hook", "pre-tool", payload}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "KKT hook warning") {
+		t.Fatalf("observe mode should emit an agent warning, got %q", stdout.String())
 	}
 }
 
