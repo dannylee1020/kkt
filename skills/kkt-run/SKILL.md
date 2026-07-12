@@ -12,7 +12,7 @@ Read `references/kkt-kernel.md` and `references/state-contract.md` before acting
 
 ## Core Rule
 
-Run only the selected model. Before edits, load the model workspace, validate the guardrail contract, run the model-ready judge checkpoint, show the execution contract, and get explicit approval. During implementation, use the pre-mutation and finalize checkpoints to catch drift before changing files or finishing.
+Run only the selected model. Before edits, load the model workspace, materialize the bounded execution plan, validate the guardrail contract, run the model-ready judge checkpoint, show the complete execution contract, and get explicit approval. During implementation, use the pre-mutation and finalize checkpoints to catch drift before changing files or finishing.
 
 ## CLI-First Workflow
 
@@ -22,12 +22,12 @@ Use the `kkt` CLI as the workflow control path. The skill owns implementation ju
 kkt run from-model [model-workspace]
 kkt status [--json]
 kkt show model
+kkt plan "<execution contract>"
 kkt guardrails validate
 kkt judge --checkpoint model-ready --json
 kkt approve "<approved scope>"
 kkt hooks arm --mode enforce
 kkt judge --checkpoint pre-mutation --json
-kkt plan "<execution contract>"
 kkt progress "<progress update>"
 kkt evidence --command "<validation command>" "<validation evidence>"
 kkt validate --run
@@ -35,21 +35,22 @@ kkt judge --checkpoint finalize --json
 kkt done
 ```
 
-If no completed model workspace exists, switch back to `$kkt-model` instead of inventing one. If the work needs continuation, autonomous execution, multiple resumptions, task queues, or event replay, switch to `$kkt-loop`.
+If no completed model workspace exists, switch back to `$kkt-model` instead of inventing one. If the work needs continuation, autonomous execution, multiple resumptions, task queues, or event replay, start from that completed model with `$kkt-loop` / `kkt loop from-model [model-workspace]` rather than adding loop machinery to a run workspace.
 
 ## Workflow
 
 1. Resolve or create the run workspace with `kkt run from-model [model-workspace]`.
 2. Read `kkt status --json`, `kkt show model`, `kkt show guardrails`, and `kkt guardrails validate`.
-3. Run `kkt judge --checkpoint model-ready --json`. Treat `block` as a hard stop, `warn` as a contract-quality issue to repair before risky edits, and `allow` as permission to seek approval. This checkpoint blocks if modeled constraints or allowed path bounds are missing.
-4. Confirm whether the selected model used plan assimilation. Preserve the model's classification of prior-plan claims and do not promote unverified prior-plan assumptions during execution.
-5. Show the user the execution contract: selected model, hard constraints, allowed paths, blocked paths, validation commands, and residual risk.
-6. Get explicit approval and record it with `kkt approve`.
-7. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval to enable project-local deterministic hook enforcement for this workspace. Hooks are off by default and auto-disarm on `kkt done` or `kkt block`.
-8. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks missing approval and explicitly blocked-path drift while ignoring unrelated unchanged branch work outside `allowed_paths`. When hooks are armed, hook baseline checks additionally block new post-approval mutations outside `allowed_paths`.
-9. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility.
-10. Record progress and validation evidence with CLI commands. Use `kkt evidence` for narrative evidence, not as deterministic command proof.
-11. Run `kkt validate --run` when guardrails list required commands, then run `kkt judge --checkpoint finalize --json` before `kkt done`.
+3. Record `kkt plan` before approval. It must name the execution steps, validation plan, evidence required, and stop conditions derived from the selected model.
+4. Run `kkt judge --checkpoint model-ready --json`. Treat `block` as a hard stop, `warn` as a contract-quality issue to repair before risky edits, and `allow` as permission to seek approval. This checkpoint blocks if modeled constraints, allowed path bounds, or the execution plan are incomplete.
+5. Confirm whether the selected model used plan assimilation. Preserve the model's classification of prior-plan claims and do not promote unverified prior-plan assumptions during execution.
+6. Show the user the execution contract: selected model, plan, hard constraints, allowed paths, blocked paths, validation commands, and residual risk.
+7. Get explicit approval and record it with `kkt approve`.
+8. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval to enable project-local deterministic hook enforcement for this workspace. Hooks are off by default and auto-disarm on `kkt done` or `kkt block`.
+9. Before modifying files, run `kkt judge --checkpoint pre-mutation --json`; it blocks missing approval and explicitly blocked-path drift while ignoring unrelated unchanged branch work outside `allowed_paths`. When hooks are armed, hook baseline checks additionally block new post-approval mutations outside `allowed_paths`.
+10. Implement the smallest change that satisfies the selected model. Do not expand scope, add unrelated cleanup, or change the model unless new evidence invalidates feasibility. A material model, guardrail, or plan change invalidates approval and requires a new approval.
+11. Record progress and validation evidence with CLI commands. Use `kkt evidence` for narrative evidence, not as deterministic command proof.
+12. Run `kkt validate --run` when guardrails list required commands, then run `kkt judge --checkpoint finalize --json` before `kkt done`.
 
 ## Stop Conditions
 

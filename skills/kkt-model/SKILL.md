@@ -24,7 +24,7 @@ kkt status [--json]
 kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
-kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<objective_function, files_to_modify, constraint_functions, decision_variables, validation_proof, and selected model>"
+kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<canonical Optimized Plan Contract>"
 kkt guardrails set '<constraints and path bounds JSON>'
 kkt guardrails validate
 kkt validate
@@ -42,7 +42,7 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 5. Separate explicit requirements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
 6. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
 7. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
-8. Build the shared optimization model from intent and discovery: objective function, system state, files to modify or affected surfaces, constraint functions, decision variables, hard/soft constraints, candidates, feasibility, binding constraints, sensitivity, and execution implications.
+8. Produce the canonical Optimized Plan Contract from `feature-optimization-model.md` at deep depth, using `Analysis Extensions` for method rationale, coupling, sensitivity, and unresolved owner decisions.
 9. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
 10. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
 11. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
@@ -59,11 +59,11 @@ End with one of:
 
 For each serious alternative, include the method used, objective fit, decision-variable assignments, hard-constraint status, binding constraints, tradeoffs, execution-contract implications, residual risks, and when to choose it.
 
-Decision briefs must include the optimized-plan reasoning from `references/feature-optimization-model.md`: objective function, known constraints, files to modify or affected surfaces, forbidden files or surfaces, constraint functions, decision variables, candidate feasibility, selected plan, binding constraints, validation proof, execution implications, and residual risk.
+Decision briefs must use the canonical Optimized Plan Contract from `references/feature-optimization-model.md` at deep depth.
 
 ## Durable Output
 
-For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. `guardrails.json` carries the modeled constraints and path bounds that `$kkt-run` or `$kkt-loop` will enforce before mutation. Load `references/schemas.md` only when a full copyable shape is needed. Do not create execution files unless switching to `$kkt-run` or `$kkt-loop`.
+For substantial modeling work, use project-root `.kkt/model/<slug>/` through `kkt` commands. `kkt.yaml` is the state index; Markdown files carry rich intent, discovery, and modeling context. `guardrails.json` carries the modeled constraints and path bounds that `$kkt-run` or `$kkt-loop` will enforce before mutation. A completed model is the reusable handoff: use `kkt run from-model [model-workspace]` for bounded execution or `kkt loop from-model [model-workspace]` for durable iterative execution. Load `references/schemas.md` only when a full copyable shape is needed. Do not create execution files unless switching to `$kkt-run` or `$kkt-loop`.
 
 ## Do Not
 

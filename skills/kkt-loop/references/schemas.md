@@ -1,6 +1,6 @@
 # KKT Schemas
 
-Optional reference for copyable shapes. Do not load this on every invocation; use it when writing or auditing durable KKT state, layer contracts, plan-assimilation output, discovery tooling output, or guardrails.
+Optional serialization reference for copyable shapes. Do not load this on every invocation; use it when writing or auditing durable KKT state, layer contracts, plan-assimilation output, discovery tooling output, or guardrails. The Optimized Plan shape serializes the canonical contract in `feature-optimization-model.md`; it adds no planning semantics.
 
 ## Layer Contract
 
@@ -57,6 +57,7 @@ optimized_plan:
   validation_proof:
   execution_implications:
   guardrail_variables:
+  analysis_extensions:
   residual_risk:
 ```
 
@@ -126,6 +127,8 @@ execution_contract:
   stop_conditions:
   continuation_policy:
 ```
+
+`planning_contract` in `kkt.yaml` is lightweight plan-tier state metadata, not an alternate Optimized Plan Contract.
 
 ## kkt.yaml
 
