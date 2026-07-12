@@ -215,6 +215,19 @@ func runApprove(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
+	if state.WorkspaceType == "run" || state.WorkspaceType == "loop" {
+		result, judgeErr := judgeWorkspace(".", workspace, "model-ready")
+		if judgeErr != nil {
+			return judgeErr
+		}
+		if result.Verdict != "allow" {
+			return fmt.Errorf("approval requires a model-ready execution contract: %s", result.Reason)
+		}
+	}
 	scope := strings.TrimSpace(strings.Join(args, " "))
 	if scope == "" {
 		scope = "Approved selected KKT model."
@@ -233,6 +246,26 @@ func runApprove(args []string, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "approved: %s\n", scope)
 	return nil
+}
+
+func invalidateExecutionApproval(workspace, reason string) error {
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
+	if (state.WorkspaceType != "run" && state.WorkspaceType != "loop") || state.ApprovalStatus != "approved" {
+		return nil
+	}
+	if err := updateApproval(workspace, "pending", ""); err != nil {
+		return err
+	}
+	if err := updateTopLevelState(workspace, "status", "modeling"); err != nil {
+		return err
+	}
+	if err := disarmHooksForWorkspace(workspace); err != nil {
+		return err
+	}
+	return appendEvent(workspace, "approval_invalidated", map[string]any{"reason": reason})
 }
 
 func runBlock(args []string, stdout io.Writer) error {
@@ -363,6 +396,13 @@ func runTask(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
+	if state.WorkspaceType != "loop" {
+		return errors.New("task requires a loop workspace")
+	}
 	loop, err := readLoopState(workspace)
 	if err != nil {
 		return err
@@ -380,6 +420,9 @@ func runTask(args []string, stdout io.Writer) error {
 		task := LoopTask{ID: uniqueTaskID(loop, slugify(title)), Title: title, Status: "pending"}
 		loop.Tasks = append(loop.Tasks, task)
 		if err := writeLoopState(workspace, loop); err != nil {
+			return err
+		}
+		if err := invalidateExecutionApproval(workspace, "loop tasks changed"); err != nil {
 			return err
 		}
 		if err := appendEvent(workspace, "task_added", map[string]any{"task": task.ID, "title": title}); err != nil {
@@ -433,6 +476,13 @@ func runCriteria(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		return err
+	}
+	if state.WorkspaceType != "loop" {
+		return errors.New("criteria requires a loop workspace")
+	}
 	loop, err := readLoopState(workspace)
 	if err != nil {
 		return err
@@ -457,6 +507,9 @@ func runCriteria(args []string, stdout io.Writer) error {
 		criterion := LoopCriterion{ID: uniqueCriterionID(loop, slugify(text)), Text: text, Status: "pending"}
 		loop.AcceptanceCriteria = append(loop.AcceptanceCriteria, criterion)
 		if err := writeLoopState(workspace, loop); err != nil {
+			return err
+		}
+		if err := invalidateExecutionApproval(workspace, "loop acceptance criteria changed"); err != nil {
 			return err
 		}
 		if err := appendEvent(workspace, "criterion_added", map[string]any{"criterion": criterion.ID, "text": text}); err != nil {
@@ -669,6 +722,16 @@ func updateStateForArtifact(workspace, artifact, content, method string, evidenc
 			}
 		}
 		if err := updateTopLevelState(workspace, "active_layer", nextActiveLayer(state, artifact)); err != nil {
+			return err
+		}
+	}
+	if artifact == "model" && (state.WorkspaceType == "run" || state.WorkspaceType == "loop") {
+		if err := updateLayerState(workspace, "execution", "pending", "pending", "Model changed; record an updated execution plan before approval."); err != nil {
+			return err
+		}
+	}
+	if artifact == "model" || artifact == "plan" {
+		if err := invalidateExecutionApproval(workspace, artifact+" changed"); err != nil {
 			return err
 		}
 	}
@@ -1510,6 +1573,10 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 		return NextAction{SchemaVersion: 1, Action: "run_required_validation", Reason: "guardrails define required validation commands", Blocked: false, Requires: []string{"kkt validate --run", "kkt judge --checkpoint finalize --json", "kkt done"}, Instruction: instruction}
 	}
 	if state.WorkspaceType == "run" && state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
+		if issues := executionContractReadinessIssues(workspace, state); len(issues) > 0 {
+			instruction := "next: record the execution plan with kkt plan, then run kkt judge --checkpoint model-ready --json before requesting approval"
+			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt judge --checkpoint model-ready --json"}, Instruction: instruction}
+		}
 		instruction := "next: show the selected model and record approval with kkt approve before execution"
 		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
 	}
@@ -1533,7 +1600,14 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 			return NextAction{SchemaVersion: 1, Action: "resolve_stop_condition", Reason: "stop condition is active", StopCondition: stop.Text, Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: instruction}
 		}
 	}
+	if state.ActiveLayer != "execution" && state.ActiveLayer != "validation" {
+		return continueLayerAction(state)
+	}
 	if state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
+		if issues := executionContractReadinessIssues(workspace, state); len(issues) > 0 {
+			instruction := "next: record the execution plan, add tasks and acceptance criteria, then run kkt judge --checkpoint model-ready --json before requesting approval"
+			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt task add", "kkt criteria add", "kkt judge --checkpoint model-ready --json"}, Instruction: instruction}
+		}
 		instruction := "next: show the selected model and record approval with kkt approve before execution"
 		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
 	}

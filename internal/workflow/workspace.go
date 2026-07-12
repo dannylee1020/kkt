@@ -238,8 +238,11 @@ func NextInstruction(state State) string {
 		}
 		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
-		if (state.WorkspaceType == "loop" || state.WorkspaceType == "run") && state.ApprovalStatus != "approved" {
-			return "next: show the selected model and record approval with kkt approve before execution"
+		if state.WorkspaceType == "loop" && state.ApprovalStatus != "approved" {
+			return "next: record plan.md, tasks, and acceptance criteria; run kkt judge --checkpoint model-ready --json, then get approval before execution"
+		}
+		if state.WorkspaceType == "run" && state.ApprovalStatus != "approved" {
+			return "next: record plan.md; run kkt judge --checkpoint model-ready --json, then get approval before execution"
 		}
 		return "next: execute only the approved plan and record progress with kkt progress"
 	case "validation":

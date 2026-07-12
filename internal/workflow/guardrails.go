@@ -152,6 +152,9 @@ func runGuardrails(args []string, stdout io.Writer) error {
 		if err := os.WriteFile(path, []byte(content+"\n"), 0o644); err != nil {
 			return err
 		}
+		if err := invalidateExecutionApproval(workspace, "guardrails changed"); err != nil {
+			return err
+		}
 		fmt.Fprintln(stdout, "recorded: guardrails")
 		return nil
 	case "validate":
@@ -174,25 +177,35 @@ func runGuardrails(args []string, stdout io.Writer) error {
 }
 
 func runRun(args []string, stdout io.Writer) error {
+	return runExecutionFromModel(args, "run", stdout)
+}
+
+func runLoop(args []string, stdout io.Writer) error {
+	return runExecutionFromModel(args, "loop", stdout)
+}
+
+func runExecutionFromModel(args []string, profile string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("run requires an action: from-model")
+		return fmt.Errorf("%s requires an action: from-model", profile)
 	}
-	switch args[0] {
-	case "from-model":
-		if len(args) > 2 {
-			return errors.New("run from-model accepts at most one model workspace")
-		}
-		workspace, err := createRunFromModel(".", firstArg(args[1:]))
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(stdout, "created: %s\n", workspace.Path)
-		fmt.Fprintln(stdout, "profile: run")
-		fmt.Fprintln(stdout, "next: run kkt judge --checkpoint model-ready --json, then get approval before mutation")
-		return nil
-	default:
-		return fmt.Errorf("unsupported run action %q", args[0])
+	if args[0] != "from-model" {
+		return fmt.Errorf("unsupported %s action %q", profile, args[0])
 	}
+	if len(args) > 2 {
+		return fmt.Errorf("%s from-model accepts at most one model workspace", profile)
+	}
+	workspace, err := createExecutionFromModel(".", firstArg(args[1:]), profile)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "created: %s\n", workspace.Path)
+	fmt.Fprintf(stdout, "profile: %s\n", profile)
+	if profile == "loop" {
+		fmt.Fprintln(stdout, "next: materialize the execution plan, tasks, and criteria; run kkt judge --checkpoint model-ready --json, then get approval before mutation")
+	} else {
+		fmt.Fprintln(stdout, "next: materialize the execution plan; run kkt judge --checkpoint model-ready --json, then get approval before mutation")
+	}
+	return nil
 }
 
 func runJudge(args []string, stdout io.Writer) error {
@@ -304,11 +317,12 @@ func judgeWorkspace(root, path, checkpoint string) (JudgeResult, error) {
 					result.Repair = append(result.Repair, "populate guardrails.json constraints and change_bounds.allowed_paths from the selected model")
 				}
 			}
-			if state.ActiveLayer != "execution" && state.ActiveLayer != "validation" {
+			if issues := executionContractReadinessIssues(workspace, state); len(issues) > 0 {
 				result.Verdict = "block"
 				result.DriftType = "model_ready"
-				result.Reason = "model-ready checkpoint requires an execution contract"
-				result.Repair = append(result.Repair, "record the selected model and plan before execution")
+				result.Reason = "model-ready checkpoint requires a complete execution contract"
+				result.Evidence = append(result.Evidence, issues...)
+				result.Repair = append(result.Repair, "record plan.md before approval; loop workspaces must also record at least one task and acceptance criterion")
 			}
 		}
 	case "pre-mutation":
@@ -392,6 +406,37 @@ func judgeWorkspace(root, path, checkpoint string) (JudgeResult, error) {
 		result.Repair = append(result.Repair, "use model-ready, pre-mutation, continuation, finalize, pre-tool, post-tool, pre-compact, or post-compact")
 	}
 	return result, nil
+}
+
+func executionContractReadinessIssues(workspace string, state State) []string {
+	statuses, err := layerStatuses(workspace)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	var issues []string
+	for _, layer := range []string{"intent", "discovery", "modeling", "execution"} {
+		if statuses[layer] != "complete" {
+			status := statuses[layer]
+			if status == "" {
+				status = "missing"
+			}
+			issues = append(issues, fmt.Sprintf("%s layer is %s", layer, status))
+		}
+	}
+	if state.WorkspaceType != "loop" {
+		return issues
+	}
+	loop, err := readLoopState(workspace)
+	if err != nil {
+		return append(issues, err.Error())
+	}
+	if len(loop.Tasks) == 0 {
+		issues = append(issues, "loop execution contract has no tasks")
+	}
+	if len(loop.AcceptanceCriteria) == 0 {
+		issues = append(issues, "loop execution contract has no acceptance criteria")
+	}
+	return issues
 }
 
 func defaultGuardrailsJSON(request, profile, sourceWorkspace string) string {
@@ -755,7 +800,10 @@ func uniqueNonEmpty(values []string) []string {
 	return unique
 }
 
-func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
+func createExecutionFromModel(root, modelWorkspace, profile string) (Workspace, error) {
+	if profile != "run" && profile != "loop" {
+		return Workspace{}, fmt.Errorf("from-model does not support profile %q", profile)
+	}
 	if modelWorkspace == "" {
 		resolved, err := ResolveWorkspace(root, "")
 		if err != nil {
@@ -782,26 +830,26 @@ func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
 		return Workspace{}, err
 	}
 	if request == "" {
-		request = "Run selected KKT model"
+		request = "Execute selected KKT model"
 	}
 	now := time.Now().UTC()
-	slug := fmt.Sprintf("%s-run-%s", now.Format("20060102-150405"), filepath.Base(modelWorkspace))
+	slug := fmt.Sprintf("%s-%s-%s", now.Format("20060102-150405"), profile, filepath.Base(modelWorkspace))
 	base := filepath.Join(projectRootDir, ".kkt")
-	runWorkspace := filepath.Join(base, "run", slug)
-	if err := os.MkdirAll(runWorkspace, 0o755); err != nil {
+	executionWorkspace := filepath.Join(base, profile, slug)
+	if err := os.MkdirAll(executionWorkspace, 0o755); err != nil {
 		return Workspace{}, err
 	}
-	sourceWorkspace := normalizeRepoPath(filepath.Join(".kkt", currentPointer("run", slug)))
-	files := workspaceFiles(request, "run", now, sourceWorkspace)
+	sourceWorkspace := normalizeRepoPath(filepath.Join(".kkt", currentPointer(profile, slug)))
+	files := workspaceFiles(request, profile, now, sourceWorkspace)
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(runWorkspace, name), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(executionWorkspace, name), []byte(content), 0o644); err != nil {
 			return Workspace{}, err
 		}
 	}
 	for _, name := range []string{"intent.md", "discovery.md", "model.md", "guardrails.json"} {
-		if err := copyWorkspaceFile(modelWorkspace, runWorkspace, name); err != nil {
+		if err := copyWorkspaceFile(modelWorkspace, executionWorkspace, name); err != nil {
 			if errors.Is(err, os.ErrNotExist) && name == "guardrails.json" {
-				if writeErr := os.WriteFile(filepath.Join(runWorkspace, name), []byte(defaultGuardrailsJSON(request, "run", workspaceSourcePath(projectRootDir, modelWorkspace))), 0o644); writeErr != nil {
+				if writeErr := os.WriteFile(filepath.Join(executionWorkspace, name), []byte(defaultGuardrailsJSON(request, profile, workspaceSourcePath(projectRootDir, modelWorkspace))), 0o644); writeErr != nil {
 					return Workspace{}, writeErr
 				}
 				continue
@@ -809,16 +857,16 @@ func createRunFromModel(root, modelWorkspace string) (Workspace, error) {
 			return Workspace{}, err
 		}
 	}
-	if err := updateRunSource(runWorkspace, modelWorkspace); err != nil {
+	if err := updateExecutionSource(executionWorkspace, modelWorkspace, profile); err != nil {
 		return Workspace{}, err
 	}
-	if err := markImportedModelLayers(runWorkspace, modelWorkspace); err != nil {
+	if err := markImportedModelLayers(executionWorkspace, modelWorkspace); err != nil {
 		return Workspace{}, err
 	}
-	if err := os.WriteFile(filepath.Join(base, "current"), []byte(currentPointer("run", slug)+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "current"), []byte(currentPointer(profile, slug)+"\n"), 0o644); err != nil {
 		return Workspace{}, err
 	}
-	return Workspace{Path: runWorkspace, Profile: "run"}, nil
+	return Workspace{Path: executionWorkspace, Profile: profile}, nil
 }
 
 func copyWorkspaceFile(sourceWorkspace, targetWorkspace, name string) error {
@@ -829,45 +877,45 @@ func copyWorkspaceFile(sourceWorkspace, targetWorkspace, name string) error {
 	return os.WriteFile(filepath.Join(targetWorkspace, name), payload, 0o644)
 }
 
-func updateRunSource(runWorkspace, modelWorkspace string) error {
-	if err := updateTopLevelState(runWorkspace, "active_layer", "execution"); err != nil {
+func updateExecutionSource(executionWorkspace, modelWorkspace, profile string) error {
+	if err := updateTopLevelState(executionWorkspace, "active_layer", "execution"); err != nil {
 		return err
 	}
-	// Running from a completed model imports the model decision; mutation still
-	// requires the user-facing approval gate before edits in the skill flow.
-	if err := updateApproval(runWorkspace, "pending", ""); err != nil {
+	// Importing a completed model preserves its decision; mutation still requires
+	// the user-facing approval gate before edits in either execution profile.
+	if err := updateApproval(executionWorkspace, "pending", ""); err != nil {
 		return err
 	}
-	contract, err := readGuardrails(runWorkspace)
+	contract, err := readGuardrails(executionWorkspace)
 	if err != nil {
 		return nil
 	}
 	contract.Source.WorkspaceType = "model"
-	projectRootDir, rootErr := projectRootForWorkspace(".", runWorkspace)
+	projectRootDir, rootErr := projectRootForWorkspace(".", executionWorkspace)
 	if rootErr == nil {
 		contract.Source.Workspace = workspaceSourcePath(projectRootDir, modelWorkspace)
 	} else {
 		contract.Source.Workspace = modelWorkspace
 	}
-	contract.Workflow.ExecutionMode = "run"
+	contract.Workflow.ExecutionMode = profile
 	payload, err := json.MarshalIndent(contract, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(runWorkspace, "guardrails.json"), append(payload, '\n'), 0o644)
+	return os.WriteFile(filepath.Join(executionWorkspace, "guardrails.json"), append(payload, '\n'), 0o644)
 }
 
-func markImportedModelLayers(runWorkspace, modelWorkspace string) error {
+func markImportedModelLayers(executionWorkspace, modelWorkspace string) error {
 	source := modelWorkspace
-	if projectRootDir, err := projectRootForWorkspace(".", runWorkspace); err == nil {
+	if projectRootDir, err := projectRootForWorkspace(".", executionWorkspace); err == nil {
 		source = workspaceSourcePath(projectRootDir, modelWorkspace)
 	}
 	for _, layer := range []string{"intent", "discovery", "modeling"} {
 		summary := "Imported from " + source
-		if err := updateLayerState(runWorkspace, layer, "complete", "imported", summary); err != nil {
+		if err := updateLayerState(executionWorkspace, layer, "complete", "imported", summary); err != nil {
 			return err
 		}
-		if err := appendMethodInvocation(runWorkspace, layer, "imported", summary); err != nil {
+		if err := appendMethodInvocation(executionWorkspace, layer, "imported", summary); err != nil {
 			return err
 		}
 	}

@@ -28,6 +28,7 @@ Usage:
   kkt hooks status|arm|disarm [--json] [--mode observe|enforce] [--ttl duration]
   kkt hook pre-tool|post-tool|pre-compact|post-compact|stop [--agent agent] [--json] [payload]
   kkt run from-model [model-workspace]
+  kkt loop from-model [model-workspace]
   kkt approve [scope]
   kkt criteria [add|satisfy|block] [criterion]
   kkt task [add|start|done|skip|block] [task]
@@ -73,6 +74,8 @@ func Run(args []string, stdout, stderr io.Writer) error {
 		return runHook(args[1:], stdout)
 	case "run":
 		return runRun(args[1:], stdout)
+	case "loop":
+		return runLoop(args[1:], stdout)
 	case "approve":
 		return runApprove(args[1:], stdout)
 	case "criteria":
@@ -348,8 +351,8 @@ func startInstruction(profile string) string {
 	case "model":
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
 	case "run":
-		return "record or import the selected model, run kkt judge --checkpoint model-ready, then request approval before edits"
+		return "record or import the selected model, materialize the execution plan, run kkt judge --checkpoint model-ready, then request approval before edits"
 	default:
-		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery/model/plan"
+		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery, model, execution plan, tasks, and criteria before approval"
 	}
 }

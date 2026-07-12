@@ -168,8 +168,17 @@ Use the deeper workflows when the task needs them:
 
 ```text
 $kkt-model <architecture or tradeoff question>
-$kkt-run <implement completed model>
-$kkt-loop <long-running implementation>
+$kkt-run <implement completed model with bounded execution>
+$kkt-loop <long-running implementation, fresh or from a completed model>
+```
+
+For a large change, model once and choose the execution strategy afterward:
+
+```text
+$kkt-model <large change>
+$kkt-run   # bounded implementation
+# or
+$kkt-loop  # durable iterative implementation
 ```
 
 Skill invocation syntax varies by agent:
@@ -186,10 +195,12 @@ OpenCode:    ask OpenCode to use the relevant kkt skill
 | workflow | use it for | what it produces | durable state |
 | --- | --- | --- | --- |
 | `$kkt` | normal feature work, bug fixes, and refactors | compact model, approval, implementation, validation | none by default; optional `.kkt/kkt.yaml` only by explicit need |
-| `$kkt-model` | architecture choices and tradeoff analysis | selected model or decision brief | `.kkt/model/<slug>/` |
-| `$kkt-run` | implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
-| `$kkt-loop` | long-running or continuation-heavy work | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
+| `$kkt-model` | architecture choices and tradeoff analysis | reusable selected model or decision brief | `.kkt/model/<slug>/` |
+| `$kkt-run` | bounded implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
+| `$kkt-loop` | fresh long-running work or iterative execution of a completed model | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
 
+
+`$kkt-loop` owns continuation rather than a separate planning method. A fresh loop creates the shared model internally; a preplanned loop imports it with `kkt loop from-model [model-workspace]`. Both run and loop materialize their execution plan before approval; loops also materialize tasks and acceptance criteria before approval.
 
 kkt turns rough input into an intent frame:
 
@@ -260,6 +271,8 @@ kkt validate
 kkt approve
 
 # execution control
+kkt run from-model [model-workspace]
+kkt loop from-model [model-workspace]
 kkt criteria
 kkt task
 kkt block

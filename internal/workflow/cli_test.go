@@ -259,11 +259,22 @@ func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 	}
 
 	var judge bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "model-ready", "--json"}, &judge, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("model-ready judge should block before the execution plan is recorded")
+	}
+	if text := judge.String(); !strings.Contains(text, `"verdict": "block"`) || !strings.Contains(text, "execution layer is pending") {
+		t.Fatalf("model-ready judge should report the missing execution contract:\n%s", text)
+	}
+	if err := Run([]string{"plan", "Execute the imported selected model."}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	judge.Reset()
 	if err := Run([]string{"judge", "--checkpoint", "model-ready", "--json"}, &judge, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if text := judge.String(); !strings.Contains(text, `"verdict": "allow"`) || !strings.Contains(text, `"workspace_type": "run"`) {
-		t.Fatalf("model-ready judge should allow complete run contract:\n%s", text)
+		t.Fatalf("model-ready judge should allow a complete run contract:\n%s", text)
 	}
 
 	var next bytes.Buffer
@@ -281,6 +292,233 @@ func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 	}
 	if text := blocked.String(); !strings.Contains(text, `"verdict": "block"`) || !strings.Contains(text, `"drift_type": "approval"`) {
 		t.Fatalf("pre-mutation judge output missing approval block:\n%s", text)
+	}
+}
+
+func TestExecutionFromModelRejectsIncompleteAndNonModelSources(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "model", "incomplete", "decision"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"loop", "from-model"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "complete model workspace") {
+		t.Fatalf("loop import should reject incomplete model, got %v", err)
+	}
+	if err := Run([]string{"start", "run", "not", "a", "model"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"run", "from-model"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "requires a model workspace") {
+		t.Fatalf("run import should reject non-model workspace, got %v", err)
+	}
+}
+
+func TestLoopFromModelCreatesApprovalGatedLoop(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "model", "migrate", "workflow", "state"},
+		{"intent", "--method", "why_how", "Clarified migration tradeoffs"},
+		{"discovery", "--method", "coupling_map", "Mapped workflow callers"},
+		{"model", "--method", "ordinal_mcda", "Selected a staged migration"},
+		{"guardrails", "set", testGuardrailsJSON("model", []string{"internal/workflow/**"}, nil)},
+		{"done", "Model complete"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	source, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceModel, err := os.ReadFile(filepath.Join(source, "model.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceState, err := os.ReadFile(filepath.Join(source, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var created bytes.Buffer
+	if err := Run([]string{"loop", "from-model", source}, &created, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := created.String(); !strings.Contains(text, "profile: loop") || !strings.Contains(text, "tasks, and criteria") {
+		t.Fatalf("loop from-model output missing loop guidance:\n%s", text)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := filepath.Base(filepath.Dir(workspace)), "loop"; got != want {
+		t.Fatalf("current workspace = %q, want loop workspace", workspace)
+	}
+	for _, name := range []string{"events.jsonl", "plan.md", "progress.md", "evidence.md"} {
+		if _, err := os.Stat(filepath.Join(workspace, name)); err != nil {
+			t.Fatalf("imported loop missing %s: %v", name, err)
+		}
+	}
+	state, err := os.ReadFile(filepath.Join(workspace, "kkt.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`workspace_type: loop`, `method: "imported"`, `active_layer: "execution"`} {
+		if !strings.Contains(string(state), want) {
+			t.Fatalf("loop state missing %q:\n%s", want, state)
+		}
+	}
+	guardrails, err := os.ReadFile(filepath.Join(workspace, "guardrails.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(guardrails); !strings.Contains(text, `"execution_mode": "loop"`) || !strings.Contains(text, filepath.Base(source)) {
+		t.Fatalf("imported loop guardrails lost model provenance:\n%s", text)
+	}
+	if currentModel, err := os.ReadFile(filepath.Join(source, "model.md")); err != nil || string(currentModel) != string(sourceModel) {
+		t.Fatalf("source model changed during loop import: %v", err)
+	}
+	if currentState, err := os.ReadFile(filepath.Join(source, "kkt.yaml")); err != nil || string(currentState) != string(sourceState) {
+		t.Fatalf("source state changed during loop import: %v", err)
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := next.String(); !strings.Contains(text, `"action": "materialize_execution_contract"`) {
+		t.Fatalf("imported loop should require execution-contract materialization:\n%s", text)
+	}
+	for _, command := range [][]string{
+		{"plan", "Execute the imported migration."},
+		{"task", "add", "Migrate workflow state"},
+		{"criteria", "add", "Migration validation passes"},
+	} {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	var judge bytes.Buffer
+	if err := Run([]string{"judge", "--checkpoint", "model-ready", "--json"}, &judge, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := judge.String(); !strings.Contains(text, `"verdict": "allow"`) {
+		t.Fatalf("materialized imported loop should be model-ready:\n%s", text)
+	}
+	if err := Run([]string{"approve", "Approved imported migration"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExecutionContractChangeInvalidatesApproval(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationRunWorkspace(t, nil)
+
+	if err := Run([]string{"guardrails", "set", testGuardrailsJSON("run", []string{"**"}, nil)}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ApprovalStatus != "pending" || state.Status != "modeling" {
+		t.Fatalf("contract change should invalidate approval, got %#v", state)
+	}
+	var judge bytes.Buffer
+	err = Run([]string{"judge", "--checkpoint", "pre-mutation", "--json"}, &judge, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("pre-mutation should block after execution-contract changes invalidate approval")
+	}
+	if text := judge.String(); !strings.Contains(text, `"drift_type": "approval"`) {
+		t.Fatalf("expected approval block after contract change:\n%s", text)
+	}
+}
+
+func TestModelChangeRequiresReplannedExecutionBeforeApproval(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationRunWorkspace(t, nil)
+
+	if err := Run([]string{"model", "--method", "lexicographic", "Selected revised execution model"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ApprovalStatus != "pending" {
+		t.Fatalf("model change should invalidate approval, got %#v", state)
+	}
+	statuses, err := layerStatuses(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statuses["execution"] != "pending" {
+		t.Fatalf("model change should require a new execution plan, got %#v", statuses)
+	}
+	if err := Run([]string{"approve", "Attempt approval with stale plan"}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+		t.Fatal("approval should reject a model revision until the execution plan is refreshed")
+	}
+	if err := Run([]string{"plan", "Execute the revised selected model."}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"approve", "Approved revised model"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -306,6 +544,7 @@ func TestRunJudgeAllowsUnrelatedChangedPathOutsideAllowedBounds(t *testing.T) {
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
 		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
 	}
 	for _, command := range commands {
@@ -348,6 +587,7 @@ func TestRunJudgeAllowsChangedPathInsideAllowedBounds(t *testing.T) {
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
 		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
 	}
 	for _, command := range commands {
@@ -396,6 +636,7 @@ func TestApprovalBaselineAndUnrelatedDirtyPathDoNotBlock(t *testing.T) {
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
 		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
+		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
 	}
 	for _, command := range commands {
@@ -446,6 +687,7 @@ func TestRunJudgeBlockedPathOverridesAllowedBounds(t *testing.T) {
 		{"discovery", "--method", "traceability_matrix", "Expected broad change"},
 		{"model", "--method", "lexicographic", "Selected broad plan with README blocked"},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"**"}, []string{"README.md"})},
+		{"plan", "Execute the selected broad plan."},
 		{"approve", "Approved broad scope"},
 	}
 	for _, command := range commands {
@@ -638,12 +880,12 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
 		{"model", "--method", "lexicographic", "Selected loop plan"},
 		{"plan", "Execute the selected loop plan."},
+		{"task", "add", "Inspect code"},
+		{"criteria", "add", "Evidence recorded"},
 		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
 		{"approve", "Approved test loop"},
-		{"task", "add", "Inspect code"},
 		{"task", "start", "inspect-code"},
 		{"progress", "Started inspection"},
-		{"criteria", "add", "Evidence recorded"},
 		{"evidence", "--for", "evidence-recorded", "--command", "go test ./...", "go test ./... passed"},
 		{"criteria", "satisfy", "evidence-recorded"},
 		{"task", "done", "inspect-code"},
@@ -714,7 +956,7 @@ func TestRunNextForFreshLoopUsesActiveLayer(t *testing.T) {
 	}
 }
 
-func TestRunNextRequiresApprovalAfterLoopModel(t *testing.T) {
+func TestRunNextRequiresExecutionContractAfterLoopModel(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -746,8 +988,8 @@ func TestRunNextRequiresApprovalAfterLoopModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := next.String()
-	if !strings.Contains(text, `"action": "request_approval"`) || !strings.Contains(text, `"blocked": true`) {
-		t.Fatalf("loop after model should request approval:\n%s", text)
+	if !strings.Contains(text, `"action": "materialize_execution_contract"`) || strings.Contains(text, `"blocked": true`) {
+		t.Fatalf("loop after model should require execution-contract materialization:\n%s", text)
 	}
 }
 
@@ -781,8 +1023,8 @@ func TestRunNextRequiresApprovalBeforeLoopTaskExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := next.String()
-	if !strings.Contains(text, `"action": "request_approval"`) || !strings.Contains(text, `"blocked": true`) {
-		t.Fatalf("unapproved loop with work should request approval:\n%s", text)
+	if !strings.Contains(text, `"action": "continue_layer"`) || !strings.Contains(text, `"reason": "active layer is intent"`) {
+		t.Fatalf("loop with early task state should still complete modeling first:\n%s", text)
 	}
 	if strings.Contains(text, `"action": "start_task"`) || strings.Contains(text, `"task_id": "inspect-code"`) {
 		t.Fatalf("unapproved loop should not suggest task execution:\n%s", text)
@@ -806,8 +1048,14 @@ func TestRunNextJSONAndReplayCheck(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "add", "replay", "check"},
-		{"approve", "Approved replay check"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
+		{"criteria", "add", "Evidence recorded"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
+		{"approve", "Approved replay check"},
 	}
 	for _, command := range commands {
 		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -845,10 +1093,15 @@ func TestRunResumeIncludesContinuationPacket(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "resume", "context"},
-		{"approve", "Approved resume check"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
-		{"task", "start", "inspect-code"},
 		{"criteria", "add", "Evidence recorded"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
+		{"approve", "Approved resume check"},
+		{"task", "start", "inspect-code"},
 		{"evidence", "--for", "evidence-recorded", "Inspection evidence recorded"},
 	}
 	for _, command := range commands {
@@ -1193,8 +1446,8 @@ func startValidationRunWorkspaceWithBounds(t *testing.T, requiredCommands, allow
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
 		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
 		{"guardrails", "set", testGuardrailsJSONWithCommands("run", allowedPaths, blockedPaths, requiredCommands)},
-		{"approve", "Approved validation run"},
 		{"plan", "Run selected validation model."},
+		{"approve", "Approved validation run"},
 		{"evidence", "Narrative evidence recorded."},
 	}
 	for _, command := range commands {
