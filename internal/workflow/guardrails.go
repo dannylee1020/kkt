@@ -145,9 +145,15 @@ func runGuardrails(args []string, stdout io.Writer) error {
 		if content == "" {
 			return errors.New("guardrails set requires JSON content")
 		}
-		var raw map[string]any
-		if err := json.Unmarshal([]byte(content), &raw); err != nil {
+		var contract GuardrailContract
+		if err := json.Unmarshal([]byte(content), &contract); err != nil {
 			return err
+		}
+		if issues := validateCompleteGuardrailContract(contract); len(issues) > 0 {
+			for _, issue := range issues {
+				fmt.Fprintf(stdout, "- %s\n", issue)
+			}
+			return errors.New("guardrails contract is invalid")
 		}
 		if err := os.WriteFile(path, []byte(content+"\n"), 0o644); err != nil {
 			return err
@@ -201,9 +207,9 @@ func runExecutionFromModel(args []string, profile string, stdout io.Writer) erro
 	fmt.Fprintf(stdout, "created: %s\n", workspace.Path)
 	fmt.Fprintf(stdout, "profile: %s\n", profile)
 	if profile == "loop" {
-		fmt.Fprintln(stdout, "next: materialize the execution plan, tasks, and criteria; run kkt judge --checkpoint model-ready --json, then get approval before mutation")
+		fmt.Fprintln(stdout, "next: materialize the execution plan, tasks, and criteria, then approve before mutation")
 	} else {
-		fmt.Fprintln(stdout, "next: materialize the execution plan; run kkt judge --checkpoint model-ready --json, then get approval before mutation")
+		fmt.Fprintln(stdout, "next: materialize the execution plan, then approve before mutation")
 	}
 	return nil
 }
@@ -294,7 +300,7 @@ func judgeWorkspace(root, path, checkpoint string) (JudgeResult, error) {
 	contract, contractErr := readGuardrails(workspace)
 	guardrailIssues := validateGuardrails(workspace)
 	hasGuardrails := len(guardrailIssues) == 0
-	if !hasGuardrails {
+	if state.WorkspaceType != "plan" && !hasGuardrails {
 		result.Verdict = "warn"
 		result.DriftType = "guardrail_contract"
 		result.Reason = "guardrail contract is incomplete"
@@ -343,6 +349,12 @@ func judgeWorkspace(root, path, checkpoint string) (JudgeResult, error) {
 		}
 	case "continuation":
 		if state.WorkspaceType == "loop" {
+			if state.Status == "blocked" {
+				result.Verdict = "block"
+				result.DriftType = "stop_condition"
+				result.Reason = "blocked workflow cannot continue"
+				result.Repair = append(result.Repair, "resolve the workflow blocker before continuing")
+			}
 			replay, replayErr := CheckReplay(workspace)
 			if replayErr != nil {
 				return JudgeResult{}, replayErr
@@ -504,6 +516,10 @@ func validateGuardrails(workspace string) []string {
 	if err != nil {
 		return []string{"guardrails.json could not be read: " + err.Error()}
 	}
+	return validateCompleteGuardrailContract(contract)
+}
+
+func validateCompleteGuardrailContract(contract GuardrailContract) []string {
 	var issues []string
 	if contract.SchemaVersion != 1 {
 		issues = append(issues, "guardrails.json schema_version must be 1")
@@ -526,7 +542,7 @@ func validateGuardrails(workspace string) []string {
 	if len(contract.DriftPolicy.BlockOn) == 0 && strings.TrimSpace(contract.DriftPolicy.Legacy) == "" {
 		issues = append(issues, "guardrails.json drift_policy.block_on is required")
 	}
-	return issues
+	return append(issues, guardrailExecutionReadinessIssues(contract)...)
 }
 
 func guardrailExecutionReadinessIssues(contract GuardrailContract) []string {

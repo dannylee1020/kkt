@@ -15,32 +15,41 @@ const usageText = `KKT Workflow CLI
 
 Usage:
   kkt --version
-  kkt start plan|model|run|loop <request>
-  kkt status [--json] [path]
-  kkt next [--json] [path]
-  kkt show [artifact]
+
+Workspace creation:
+  kkt start plan|model|loop <request>
+  kkt start run <request>                         deprecated; prefer run from-model
+  kkt run from-model [model-workspace]
+  kkt loop from-model [model-workspace]
+
+Record planning and execution state:
   kkt intent|discovery|model [--method method] [content]
   kkt plan|progress [content]
   kkt evidence [--for criterion] [--command command] [content]
   kkt notes [content]
   kkt guardrails show|set|validate [content]
-  kkt judge --checkpoint checkpoint [--json] [path]
-  kkt hooks status|arm|disarm [--json] [--mode observe|enforce] [--ttl duration]
-  kkt hook pre-tool|post-tool|pre-compact|post-compact|stop [--agent agent] [--json] [payload]
-  kkt run from-model [model-workspace]
-  kkt loop from-model [model-workspace]
-  kkt approve [scope]
-  kkt criteria [add|satisfy|block] [criterion]
   kkt task [add|start|done|skip|block] [task]
-  kkt block [reason]
+  kkt criteria [add|satisfy|block] [criterion]
+
+Workflow transitions:
+  kkt approve [scope]
+  kkt next [--json] [path]
+  kkt resume [path]
   kkt validate [--run] [--timeout duration] [path]
   kkt done [summary]
-  kkt resume [path]
+  kkt block [reason]
+
+Diagnostics and integrations:
+  kkt status [--json] [path]
+  kkt show [artifact]
+  kkt judge --checkpoint checkpoint [--json] [path]
   kkt replay --check [path]
+  kkt hooks status|arm|disarm [--json] [--mode observe|enforce] [--ttl duration]
+  kkt hook pre-tool|post-tool|pre-compact|post-compact|stop [--agent agent] [--json] [payload]
   kkt uninstall [codex|claude|opencode|pi|all]
 
-KKT skills own the workflow. This CLI handles deterministic .kkt state
-scaffolding, workflow state, artifacts, evidence, validation, and cleanup.
+Transition commands enforce their own readiness checks. Use diagnostics to
+inspect or repair a blocked workflow, not as required happy-path ceremony.
 `
 
 func Run(args []string, stdout, stderr io.Writer) error {
@@ -150,12 +159,16 @@ func runStart(args []string, stdout io.Writer) error {
 		return err
 	}
 	if len(args) < 2 {
-		return errors.New("start requires a profile and request: plan, model, run, or loop")
+		return errors.New("start requires a profile and request: plan, model, loop, or deprecated run")
 	}
 	selectedProfile := strings.TrimSpace(args[0])
 	request := strings.TrimSpace(strings.Join(args[1:], " "))
 	if request == "" {
 		return errors.New("start requires a request")
+	}
+
+	if selectedProfile == "run" {
+		fmt.Fprintln(stdout, "warning: kkt start run is deprecated; prefer kkt run from-model [model-workspace]")
 	}
 
 	workspace, err := StartWorkflow(".", request, selectedProfile)
@@ -347,11 +360,11 @@ func firstArg(args []string) string {
 func startInstruction(profile string) string {
 	switch profile {
 	case "plan":
-		return "inspect relevant code/docs, record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model, then request approval before edits"
+		return "inspect relevant code/docs, record the canonical Optimized Plan Contract with kkt model, then request approval before edits"
 	case "model":
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
 	case "run":
-		return "record or import the selected model, materialize the execution plan, run kkt judge --checkpoint model-ready, then request approval before edits"
+		return "deprecated direct run workspace: record or import the selected model, materialize the execution plan, then request approval before edits"
 	default:
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery, model, execution plan, tasks, and criteria before approval"
 	}

@@ -188,6 +188,9 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 		if err := markPlanContractComplete(workspace); err != nil {
 			return err
 		}
+		if err := updateLayerState(workspace, "discovery", "complete", "summarized", "Discovery facts are summarized in the compact optimized plan."); err != nil {
+			return err
+		}
 	}
 	if err := updateStateForArtifact(workspace, artifact, content, method, EvidenceOptions{}); err != nil {
 		return err
@@ -197,13 +200,27 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 }
 
 func missingPlanModelFields(content string) []string {
-	text := strings.ToLower(content)
+	text := strings.ToLower(strings.ReplaceAll(content, "_", " "))
+	required := map[string][]string{
+		"objective_function":   {"objective function"},
+		"files_to_modify":      {"files to modify", "affected surfaces"},
+		"constraint_functions": {"constraint functions"},
+		"decision_variables":   {"decision variables"},
+		"validation_proof":     {"validation proof", "validation plan and proof"},
+	}
 	var missing []string
 	for _, field := range requiredPlanContractFields() {
 		if field == "planning_contract" {
 			continue
 		}
-		if !strings.Contains(text, field) {
+		present := false
+		for _, accepted := range required[field] {
+			if strings.Contains(text, accepted) {
+				present = true
+				break
+			}
+		}
+		if !present {
 			missing = append(missing, field)
 		}
 	}
@@ -323,6 +340,16 @@ func runResume(args []string, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "approval: %s\n", state.ApprovalStatus)
 	if loop, loopErr := readLoopState(workspace); loopErr == nil {
 		printResumeLoop(stdout, loop)
+		if replay, replayErr := CheckReplay(workspace); replayErr != nil {
+			fmt.Fprintf(stdout, "replay: unavailable (%v)\n", replayErr)
+		} else if replay.OK {
+			fmt.Fprintln(stdout, "replay: ok")
+		} else {
+			fmt.Fprintln(stdout, "replay: drift")
+			for _, issue := range replay.Issues {
+				fmt.Fprintf(stdout, "- %s\n", issue)
+			}
+		}
 	}
 	result, validationErr := ValidateWorkspace(workspace)
 	if validationErr == nil {
@@ -342,7 +369,8 @@ func runResume(args []string, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "- %s %s %s\n", event.Time, event.Type, eventDataSummary(event.Data))
 		}
 	}
-	fmt.Fprintln(stdout, nextInstructionForWorkspace(workspace, state))
+	action := nextActionForWorkspace(workspace, state)
+	fmt.Fprintln(stdout, action.Instruction)
 	return nil
 }
 
@@ -351,15 +379,15 @@ func runDone(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	result, err := ValidateWorkspace(workspace)
+	finalize, err := judgeWorkspace(".", workspace, "finalize")
 	if err != nil {
 		return err
 	}
-	if !result.OK {
-		for _, issue := range result.Issues {
+	if finalize.Verdict != "allow" {
+		for _, issue := range finalize.Evidence {
 			fmt.Fprintf(stdout, "- %s\n", issue)
 		}
-		return errors.New("workspace validation failed")
+		return errors.New(finalize.Reason)
 	}
 	state, err := ReadState(workspace)
 	if err != nil {
@@ -438,6 +466,11 @@ func runTask(args []string, stdout io.Writer) error {
 		if id == "" {
 			return fmt.Errorf("task %s requires a task id", action)
 		}
+		if action == "start" {
+			if err := validateTaskStart(workspace, loop, id); err != nil {
+				return err
+			}
+		}
 		nextStatus := map[string]string{
 			"start": "active",
 			"done":  "done",
@@ -469,6 +502,31 @@ func runTask(args []string, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unsupported task action %q", action)
 	}
+}
+
+func validateTaskStart(workspace string, loop LoopState, id string) error {
+	if loop.CurrentTask != "" && loop.CurrentTask != id {
+		return fmt.Errorf("task start blocked: task %s is already active", loop.CurrentTask)
+	}
+	for _, task := range loop.Tasks {
+		if task.ID != id {
+			continue
+		}
+		if task.Status != "pending" {
+			return fmt.Errorf("task start requires pending task %q, got %s", id, task.Status)
+		}
+		for _, checkpoint := range []string{"continuation", "pre-mutation"} {
+			result, err := judgeWorkspace(".", workspace, checkpoint)
+			if err != nil {
+				return err
+			}
+			if result.Verdict != "allow" {
+				return fmt.Errorf("task start blocked by %s checkpoint: %s", checkpoint, result.Reason)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown task %q", id)
 }
 
 func runCriteria(args []string, stdout io.Writer) error {
@@ -522,9 +580,14 @@ func runCriteria(args []string, stdout io.Writer) error {
 		if id == "" {
 			return fmt.Errorf("criteria %s requires a criterion id", action)
 		}
+		if !criterionIDExists(loop, id) {
+			return fmt.Errorf("unknown criterion %q", id)
+		}
 		status := "satisfied"
 		if action == "block" {
 			status = "blocked"
+		} else if !hasRecordedEvidenceForCriterion(loop, id) {
+			return fmt.Errorf("criteria satisfy requires mapped evidence for %q; record it with kkt evidence --for %s", id, id)
 		}
 		if err := setCriterionStatus(&loop, id, status); err != nil {
 			return err
@@ -1511,10 +1574,6 @@ func printCriterionGroup(stdout io.Writer, title string, criteria []LoopCriterio
 	}
 }
 
-func nextInstructionForWorkspace(workspace string, state State) string {
-	return nextActionForWorkspace(workspace, state).Instruction
-}
-
 func statusReport(workspace string, state State) (StatusReport, error) {
 	validation, err := ValidateWorkspace(workspace)
 	if err != nil {
@@ -1552,10 +1611,10 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 	if state.Status == "complete" {
 		validation, err := ValidateWorkspace(workspace)
 		if err == nil && !validation.OK {
-			instruction := "next: repair stale complete state by satisfying validation, then run kkt judge --checkpoint finalize --json and kkt done"
-			requires := []string{"kkt validate", "kkt judge --checkpoint finalize --json", "kkt done"}
+			instruction := "next: repair stale complete state by satisfying validation, then run kkt done"
+			requires := []string{"kkt validate", "kkt done"}
 			if hasRequiredValidationCommands(workspace) {
-				instruction = "next: run kkt validate --run, then kkt judge --checkpoint finalize --json and kkt done"
+				instruction = "next: run kkt validate --run, then kkt done"
 				requires[0] = "kkt validate --run"
 			}
 			return NextAction{
@@ -1569,16 +1628,28 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 		}
 	}
 	if state.ActiveLayer == "validation" && (state.WorkspaceType == "run" || state.WorkspaceType == "loop") && hasRequiredValidationCommands(workspace) {
-		instruction := "next: run kkt validate --run, then kkt judge --checkpoint finalize --json and kkt done"
-		return NextAction{SchemaVersion: 1, Action: "run_required_validation", Reason: "guardrails define required validation commands", Blocked: false, Requires: []string{"kkt validate --run", "kkt judge --checkpoint finalize --json", "kkt done"}, Instruction: instruction}
+		instruction := "next: run kkt validate --run, then kkt done"
+		return NextAction{SchemaVersion: 1, Action: "run_required_validation", Reason: "guardrails define required validation commands", Blocked: false, Requires: []string{"kkt validate --run", "kkt done"}, Instruction: instruction}
+	}
+	if state.Status == "blocked" {
+		return NextAction{SchemaVersion: 1, Action: "resolve_blocked_workflow", Reason: "workflow status is blocked", Blocked: true, Requires: []string{"user_or_system_unblock"}, Instruction: "next: resolve the blocked workflow before continuing"}
 	}
 	if state.WorkspaceType == "run" && state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
 		if issues := executionContractReadinessIssues(workspace, state); len(issues) > 0 {
-			instruction := "next: record the execution plan with kkt plan, then run kkt judge --checkpoint model-ready --json before requesting approval"
-			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt judge --checkpoint model-ready --json"}, Instruction: instruction}
+			instruction := "next: record the execution plan with kkt plan, then request approval"
+			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt approve"}, Instruction: instruction}
 		}
 		instruction := "next: show the selected model and record approval with kkt approve before execution"
 		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}
+	}
+	if state.WorkspaceType == "run" && state.ActiveLayer == "execution" && state.ApprovalStatus == "approved" {
+		result, err := judgeWorkspace(".", workspace, "pre-mutation")
+		if err != nil {
+			return NextAction{SchemaVersion: 1, Action: "inspect_guardrails", Reason: "pre-mutation readiness could not be checked", Blocked: true, Requires: []string{"kkt status"}, Instruction: "next: inspect guardrail readiness with kkt status"}
+		}
+		if result.Verdict != "allow" {
+			return NextAction{SchemaVersion: 1, Action: "resolve_guardrail_drift", Reason: result.Reason, Blocked: true, Requires: []string{"kkt status"}, Instruction: "next: resolve guardrail drift shown by kkt status"}
+		}
 	}
 	if state.WorkspaceType != "loop" {
 		return continueLayerAction(state)
@@ -1594,6 +1665,11 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 			Instruction:   instruction,
 		}
 	}
+	if replay, replayErr := CheckReplay(workspace); replayErr != nil {
+		return NextAction{SchemaVersion: 1, Action: "inspect_replay", Reason: "loop replay could not be checked", Blocked: true, Requires: []string{"kkt resume"}, Instruction: "next: inspect replay state with kkt resume"}
+	} else if !replay.OK {
+		return NextAction{SchemaVersion: 1, Action: "resolve_replay_drift", Reason: "loop replay drift detected", Blocked: true, Requires: []string{"kkt resume"}, Instruction: "next: resolve loop replay drift shown by kkt resume"}
+	}
 	for _, stop := range loop.StopConditions {
 		if stop.Status == "active" {
 			instruction := "next: resolve active stop condition: " + stop.Text
@@ -1605,8 +1681,8 @@ func nextActionForWorkspace(workspace string, state State) NextAction {
 	}
 	if state.ActiveLayer == "execution" && state.ApprovalStatus != "approved" {
 		if issues := executionContractReadinessIssues(workspace, state); len(issues) > 0 {
-			instruction := "next: record the execution plan, add tasks and acceptance criteria, then run kkt judge --checkpoint model-ready --json before requesting approval"
-			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt task add", "kkt criteria add", "kkt judge --checkpoint model-ready --json"}, Instruction: instruction}
+			instruction := "next: record the execution plan, add tasks and acceptance criteria, then request approval"
+			return NextAction{SchemaVersion: 1, Action: "materialize_execution_contract", Reason: "execution contract is incomplete", Blocked: false, Requires: []string{"kkt plan", "kkt task add", "kkt criteria add", "kkt approve"}, Instruction: instruction}
 		}
 		instruction := "next: show the selected model and record approval with kkt approve before execution"
 		return NextAction{SchemaVersion: 1, Action: "request_approval", Reason: "approval is " + state.ApprovalStatus, Blocked: true, Requires: []string{"kkt approve"}, Instruction: instruction}

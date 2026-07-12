@@ -247,43 +247,40 @@ Most users do not need to run the CLI directly. The installed skills use it as a
 Reference command groups:
 
 ```bash
-# workspace state
-kkt start
-kkt status
-kkt next
-kkt show
-kkt resume
-kkt replay
+# workspace creation
+kkt start plan|model|loop "<request>"
+kkt run from-model [model-workspace]
+kkt loop from-model [model-workspace]
 
-# workflow artifacts
+# record planning and execution state
 kkt intent
 kkt discovery
 kkt model
+kkt guardrails set '<json>'
 kkt plan
+kkt task
+kkt criteria
 kkt progress
 kkt evidence
-kkt notes
 
-# guardrails and proof
-kkt guardrails
-kkt judge
-kkt validate
+# workflow transitions
 kkt approve
-
-# execution control
-kkt run from-model [model-workspace]
-kkt loop from-model [model-workspace]
-kkt criteria
-kkt task
-kkt block
+kkt next
+kkt resume
+kkt validate --run
 kkt done
+kkt block
 
-# beta hook integration
+# diagnostics and beta hook integration
+kkt status
+kkt show
+kkt judge
+kkt replay
 kkt hooks
 kkt hook
 ```
 
-Run `kkt help` for exact syntax.
+Run `kkt help` for exact syntax. Transition commands enforce their own readiness checks: `approve` validates model readiness, `next` validates run mutation readiness and loop continuation, `task start` validates loop mutation readiness, and `done` validates finalization. Use `status`, `judge`, `guardrails validate`, and `replay` to diagnose a block rather than as required happy-path ceremony. `kkt start run` remains available for compatibility but is deprecated; use `kkt run from-model`.
 
 Ordinary `$kkt` tasks stay chat-first by default. Durable workflow state, when used, lives under the project root's `.kkt/`; deeper `model`, `run`, and `loop` workflows use that directory for artifacts, guardrails, evidence, and replayable progress. Discovery still uses normal agent tools such as search, shell commands, and repo-native language tooling rather than a KKT-specific discovery command.
 

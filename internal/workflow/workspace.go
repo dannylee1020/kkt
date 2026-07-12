@@ -101,7 +101,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", errors.New("no .kkt workspace found; run kkt start plan|model|run|loop first")
+			return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop, kkt run from-model, or kkt loop from-model first")
 		}
 		return "", err
 	}
@@ -137,7 +137,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		}
 	}
 	if len(dirs) == 0 {
-		return "", errors.New("no .kkt workspace found; run kkt start plan|model|run|loop first")
+		return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop, kkt run from-model, or kkt loop from-model first")
 	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return dirs[i].sortKey < dirs[j].sortKey
@@ -229,27 +229,27 @@ func NextInstruction(state State) string {
 		return "next: record adaptive intent with kkt intent --method <method>, then inspect the repo and record discovery with kkt discovery --method <method>"
 	case "discovery":
 		if state.WorkspaceType == "plan" {
-			return "next: inspect the repo, then record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model before edits"
+			return "next: inspect the repo, then record the canonical Optimized Plan Contract with kkt model before edits"
 		}
 		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery --method <method>"
 	case "modeling":
 		if state.WorkspaceType == "plan" {
-			return "next: record objective_function, files_to_modify, constraint_functions, decision_variables, and validation_proof with kkt model; then get explicit approval before edits"
+			return "next: record the canonical Optimized Plan Contract with kkt model; then get explicit approval before edits"
 		}
 		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
 		if state.WorkspaceType == "loop" && state.ApprovalStatus != "approved" {
-			return "next: record plan.md, tasks, and acceptance criteria; run kkt judge --checkpoint model-ready --json, then get approval before execution"
+			return "next: record plan.md, tasks, and acceptance criteria, then get approval before execution"
 		}
 		if state.WorkspaceType == "run" && state.ApprovalStatus != "approved" {
-			return "next: record plan.md; run kkt judge --checkpoint model-ready --json, then get approval before execution"
+			return "next: record plan.md, then get approval before execution"
 		}
 		return "next: execute only the approved plan and record progress with kkt progress"
 	case "validation":
 		if state.WorkspaceType == "model" {
-			return "next: run kkt validate, then finish the decision brief with kkt done"
+			return "next: finish the validated decision brief with kkt done"
 		}
-		return "next: run validation, record evidence with kkt evidence, then finish with kkt done"
+		return "next: run required validation, record evidence with kkt evidence, then finish with kkt done"
 	default:
 		return "next: inspect kkt.yaml and continue from the active layer"
 	}

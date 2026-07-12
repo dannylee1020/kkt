@@ -20,14 +20,10 @@ Use the `kkt` CLI whenever durable model state is useful. The skill owns modelin
 
 ```text
 kkt start model "<user request>"
-kkt status [--json]
-kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
 kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<canonical Optimized Plan Contract>"
-kkt guardrails set '<constraints and path bounds JSON>'
-kkt guardrails validate
-kkt validate
+kkt guardrails set '<complete constraints and path bounds JSON>'
 kkt done
 ```
 
@@ -47,7 +43,7 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 10. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
 11. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
 12. Translate the selected model into guardrail variables: constraints, allowed paths, blocked paths, validation evidence, and required commands.
-13. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, `kkt guardrails validate`, and `kkt validate` when a workspace exists.
+13. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, and `kkt done`. `guardrails set` and `done` enforce their own contract checks; use diagnostics only to repair a block.
 
 ## End States
 

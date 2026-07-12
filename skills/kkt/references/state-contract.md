@@ -25,6 +25,17 @@ Durable paths are rooted at the nearest Git/worktree root; outside Git, use the 
 
 Run and loop approval requires a complete model, valid guardrails, and `plan.md`; loops also require tasks and acceptance criteria.
 
+## Transition Ownership
+
+- `guardrails set` validates the complete candidate before writing it.
+- `approve` enforces model-ready requirements and records the approval baseline.
+- `next` is the readiness authority: run checks pre-mutation scope; loop also checks replay, stop conditions, approval, and task state.
+- `task start` enforces continuation and pre-mutation readiness.
+- `criteria satisfy` requires mapped evidence.
+- `done` enforces finalize validation and path checks.
+
+Use `status`, `judge`, `guardrails validate`, and `replay` to diagnose or repair a blocked transition, not as required happy-path steps.
+
 ## Handoff Rules
 
 1. Read `kkt.yaml`, then the prior layer artifact.

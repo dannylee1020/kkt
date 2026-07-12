@@ -23,29 +23,27 @@ Use the `kkt` CLI as the workflow control path. The skill owns reasoning policy;
 kkt start loop "<user request>"
 # Completed deep model: import it without repeating discovery or model selection.
 kkt loop from-model [model-workspace]
-kkt status [--json]
-kkt next
 kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_questions> "<intent frame>"
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
 kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<canonical Optimized Plan Contract>"
 kkt plan "<execution contract>"
 kkt criteria add "<acceptance criterion>"
 kkt task add "<task>"
-kkt guardrails validate
-kkt judge --checkpoint model-ready --json
 kkt approve "<approved scope>"
 kkt hooks arm --mode enforce
-kkt judge --checkpoint pre-mutation --json
+kkt next
 kkt task start <task-id>
 kkt progress "<progress update>"
 kkt evidence --for <criterion-id> --command "<validation command>" "<validation evidence>"
 kkt task done <task-id>
 kkt criteria satisfy <criterion-id>
 kkt validate --run
-kkt judge --checkpoint continuation --json
-kkt judge --checkpoint finalize --json
 kkt done
+
+# Diagnostics only when blocked or resuming:
 kkt resume
+kkt status [--json]
+kkt judge --checkpoint <checkpoint> --json
 kkt replay --check
 ```
 
@@ -72,20 +70,19 @@ Loop workspaces use:
 7. Inspect relevant repo context and validation paths before writing the model. Use `rg` directly for broad text and file discovery, `ast-grep` directly for structural search when syntax matters, `git` for repository state, optional helpers and language-native commands when they provide stronger evidence.
 8. Select and record methods, then produce the canonical Optimized Plan Contract from `feature-optimization-model.md` at loop depth. Include enough execution implications to derive tasks, criteria, validation, and continuation policy.
 9. Materialize the execution contract before approval: record `plan.md`, acceptance criteria, tasks, required validation evidence, and stop conditions. Fresh and imported loops use this same step; imported loops do not repeat deep modeling.
-10. Run `kkt guardrails validate` and `kkt judge --checkpoint model-ready --json`; repair or stop on any blocking result. The judge requires complete model and execution layers, and loop tasks and criteria.
-11. Show the final model and complete execution contract, then wait for explicit approval and record it with `kkt approve`.
-12. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval to enable project-local deterministic hook enforcement for this workspace. Hooks are off by default and auto-disarm on `kkt done`, `kkt block`, or execution-contract invalidation.
-13. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
-14. Before each work segment, run `kkt status --json`, `kkt next`, and `kkt judge --checkpoint continuation --json`; use `kkt next --json` when a machine-readable next action helps; inspect `kkt show state`, `kkt show progress`, and `kkt show evidence` as needed.
-15. Before modifying files or running side-effecting tools, run `kkt judge --checkpoint pre-mutation --json`; it blocks missing approval and explicitly blocked-path drift while ignoring unrelated unchanged branch work outside `allowed_paths`. When hooks are armed, hook baseline checks additionally block new post-approval mutations outside `allowed_paths`.
-16. Execute only the current or CLI-reported next task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate --run` when required commands exist.
-17. Run `kkt judge --checkpoint finalize --json` before `kkt done`.
-18. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit. A material model, guardrail, plan, task, or criterion change invalidates approval; re-run model-ready and get approval again.
+10. Show the final model and complete execution contract, then get approval with `kkt approve`. It validates the model, guardrails, path bounds, plan, tasks, and criteria internally.
+11. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval. Hooks auto-disarm on `kkt done`, `kkt block`, or execution-contract invalidation.
+12. Launch `create_goal` only when goal tools are available, no active goal exists, and the user asked to run now; otherwise output the exact `/goal` command.
+13. Before each work segment, run `kkt next` (or `kkt next --json`). It checks replay, stop conditions, approval, and task state, then returns one permitted action. Use `kkt resume` for a fuller diagnostic packet only when blocked or resuming.
+14. Start the reported task with `kkt task start`. It enforces continuation and pre-mutation readiness internally.
+15. Execute only the current task, update progress/evidence with criterion-linked evidence, update task and criteria state, and run `kkt validate --run` when required commands exist. `criteria satisfy` requires mapped evidence immediately.
+16. Run `kkt done`; it performs the finalize check internally.
+17. Re-optimize with `kkt model --method <method>` only when new evidence changes feasibility, constraints, or objective fit. A material model, guardrail, plan, task, or criterion change invalidates approval; get approval again.
 
 ## Goal Objective Template
 
 ```text
-Execute the KKT workspace at the project root's .kkt/loop/<slug>/plan.md. Follow kkt.yaml, intent.md, discovery.md, model.md, guardrails.json, plan.md, progress.md, evidence.md, notes.md, and events.jsonl. Use kkt status --json, kkt next, kkt judge, kkt hooks arm when hook adapters are installed, kkt task, kkt progress, kkt evidence, kkt criteria, kkt validate --run when required commands exist, and kkt done as the workflow control surface. Re-read state and run the continuation judge before each continuation, re-optimize only when evidence changes feasibility, and stop only for blocking judge results, listed stop conditions, proven acceptance criteria, or explicit user input.
+Execute the KKT workspace at the project root's `.kkt/loop/<slug>/plan.md`. Follow `kkt.yaml`, `model.md`, `guardrails.json`, `plan.md`, progress, evidence, and events. Use `kkt next` as the continuation control surface, `kkt task start` as the mutation gate, and `kkt done` as the finalize gate. Use `kkt resume`, `kkt status`, `kkt judge`, or `kkt replay` only to diagnose a reported block. Re-optimize only when evidence changes feasibility, and stop for a blocked transition, listed stop condition, proven acceptance criteria, or explicit user input.
 ```
 
 Do not set a token budget unless the user explicitly provides one.

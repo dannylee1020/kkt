@@ -26,8 +26,6 @@ When optional plan-tier persistence is justified, use the `kkt` CLI. The skill o
 
 ```text
 kkt start plan "<user request>"
-kkt status [--json]
-kkt next
 kkt model "<canonical Optimized Plan Contract>"
 kkt approve "<approved scope>"
 kkt evidence "<validation evidence>"

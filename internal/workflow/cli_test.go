@@ -100,8 +100,8 @@ func TestRunArtifactRecordsLayerMethodAndAdvances(t *testing.T) {
 	if err := Run([]string{"next"}, &next, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if text := next.String(); !strings.Contains(text, "run kkt validate") || strings.Contains(text, "kkt evidence") {
-		t.Fatalf("model-only next should validate without evidence guidance:\n%s", text)
+	if text := next.String(); !strings.Contains(text, "kkt done") || strings.Contains(text, "kkt evidence") || strings.Contains(text, "kkt validate") {
+		t.Fatalf("model-only next should finish without execution-evidence ceremony:\n%s", text)
 	}
 }
 
@@ -158,6 +158,9 @@ func TestRunGuardrailsShowAndValidate(t *testing.T) {
 		t.Fatalf("guardrails show missing contract fields:\n%s", text)
 	}
 
+	if err := Run([]string{"guardrails", "set", testGuardrailsJSON("model", []string{"**"}, nil)}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
 	var validate bytes.Buffer
 	if err := Run([]string{"guardrails", "validate"}, &validate, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
@@ -167,7 +170,7 @@ func TestRunGuardrailsShowAndValidate(t *testing.T) {
 	}
 }
 
-func TestRunGuardrailsValidateRequiresSourceWorkspace(t *testing.T) {
+func TestRunGuardrailsSetRejectsInvalidContract(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -184,18 +187,29 @@ func TestRunGuardrailsValidateRequiresSourceWorkspace(t *testing.T) {
 	if err := Run([]string{"start", "model", "choose", "API", "shape"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	invalid := strings.Replace(testGuardrailsJSON("model", []string{"**"}, nil), `"workspace":".kkt/test-workspace"`, `"workspace":""`, 1)
-	if err := Run([]string{"guardrails", "set", invalid}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	var validate bytes.Buffer
-	err = Run([]string{"guardrails", "validate"}, &validate, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("guardrails validate should fail when source.workspace is empty")
+	before, err := os.ReadFile(filepath.Join(workspace, "guardrails.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if text := validate.String(); !strings.Contains(text, "source.workspace is required") {
-		t.Fatalf("guardrails validation output missing source workspace issue:\n%s", text)
+	invalid := strings.Replace(testGuardrailsJSON("model", []string{"**"}, nil), `"workspace":".kkt/test-workspace"`, `"workspace":""`, 1)
+	var output bytes.Buffer
+	err = Run([]string{"guardrails", "set", invalid}, &output, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("guardrails set should reject an invalid contract")
+	}
+	if text := output.String(); !strings.Contains(text, "source.workspace is required") {
+		t.Fatalf("guardrails set output missing source workspace issue:\n%s", text)
+	}
+	after, err := os.ReadFile(filepath.Join(workspace, "guardrails.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("invalid guardrails set should not replace the existing contract")
 	}
 }
 
@@ -730,6 +744,152 @@ func TestRunRejectsDailyProfile(t *testing.T) {
 	}
 }
 
+func TestStartRunEmitsDeprecationWarning(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	if err := Run([]string{"start", "run", "legacy", "workflow"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := stdout.String(); !strings.Contains(text, "start run is deprecated") || !strings.Contains(text, "run from-model") {
+		t.Fatalf("start run should explain the canonical import path:\n%s", text)
+	}
+}
+
+func TestTaskStartEnforcesApprovalAtTransition(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "gate", "task", "start"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
+		{"task", "add", "Inspect code"},
+		{"criteria", "add", "Evidence recorded"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+
+	err = Run([]string{"task", "start", "inspect-code"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "pre-mutation checkpoint") || !strings.Contains(err.Error(), "mutation requires approval") {
+		t.Fatalf("task start should enforce approval internally, got %v", err)
+	}
+}
+
+func TestNextBlocksReplayDrift(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "loop", "detect", "replay", "drift"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
+		{"task", "add", "Inspect code"},
+		{"criteria", "add", "Evidence recorded"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
+		{"approve", "Approved replay check"},
+		{"task", "start", "inspect-code"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop, err := readLoopState(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop.CurrentTask = ""
+	loop.Tasks[0].Status = "pending"
+	if err := writeLoopState(workspace, loop); err != nil {
+		t.Fatal(err)
+	}
+
+	var next bytes.Buffer
+	if err := Run([]string{"next", "--json"}, &next, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if text := next.String(); !strings.Contains(text, `"action": "resolve_replay_drift"`) || !strings.Contains(text, `"blocked": true`) {
+		t.Fatalf("next should block replay drift:\n%s", text)
+	}
+}
+
+func TestDoneRunsFinalizePathChecks(t *testing.T) {
+	root := t.TempDir()
+	initGit(t, root)
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	startValidationRunWorkspaceWithBounds(t, nil, []string{"**"}, []string{"README.md"})
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("blocked after approval\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	err = Run([]string{"done", "should block"}, &stdout, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "changed paths violate guardrail bounds") {
+		t.Fatalf("done should enforce finalize path checks, got %v", err)
+	}
+	if text := stdout.String(); !strings.Contains(text, "changed blocked path: README.md") {
+		t.Fatalf("done should report blocked-path evidence:\n%s", text)
+	}
+}
+
 func TestPlanArtifactCommandsStayInStateFile(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
@@ -815,6 +975,35 @@ func TestPlanModelRequiresPlanningContractFields(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "objective_function") || !strings.Contains(err.Error(), "validation_proof") {
 		t.Fatalf("error did not list missing planning fields: %v", err)
+	}
+}
+
+func TestPlanDonePerformsFinalizeWithoutManualJudge(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+
+	commands := [][]string{
+		{"start", "plan", "make", "compact", "planning", "complete"},
+		{"model", "## Objective Function\nComplete compact planning.\n## Known Constraints\n- Explicit: none.\n## Decision Variables\nNone — fixed workflow.\n## Affected Surfaces\nWorkflow state.\n## Constraint Functions\n- Hard: preserve the simple plan tier.\n## Candidate Feasibility\n- Feasible: compact contract.\n## Selected Plan\nRecord the compact contract.\n## Binding Constraints\nMinimal durable state.\n## Validation Plan and Proof\ngo test ./...\n## Execution Implications\nNone.\n## Guardrail Variables\nNone.\n## Analysis Extensions\nNone.\n## Residual Risk\nValidation command availability."},
+		{"approve", "Approved compact plan"},
+		{"evidence", "Compact-plan evidence recorded."},
+		{"done", "Compact plan complete"},
+	}
+	for _, command := range commands {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatalf("Run(%v) error = %v", command, err)
+		}
 	}
 }
 
@@ -1115,14 +1304,14 @@ func TestRunResumeIncludesContinuationPacket(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := resume.String()
-	for _, want := range []string{"approval: approved", "current_task: inspect-code", "unsatisfied_criteria:", "latest_evidence:", "recent_events:", "validation: invalid"} {
+	for _, want := range []string{"approval: approved", "current_task: inspect-code", "unsatisfied_criteria:", "latest_evidence:", "recent_events:", "replay: ok", "validation: invalid"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("resume output missing %q:\n%s", want, text)
 		}
 	}
 }
 
-func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
+func TestCriteriaSatisfyRequiresMappedEvidence(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -1139,12 +1328,15 @@ func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "loop", "prove", "terminal", "validation"},
+		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
+		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
+		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
-		{"task", "start", "inspect-code"},
 		{"criteria", "add", "Evidence recorded"},
+		{"guardrails", "set", testGuardrailsJSON("loop", []string{"**"}, nil)},
+		{"approve", "Approved terminal validation"},
 		{"evidence", "Unmapped evidence"},
-		{"criteria", "satisfy", "evidence-recorded"},
-		{"task", "done", "inspect-code"},
 	}
 	for _, command := range commands {
 		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -1153,13 +1345,12 @@ func TestRunDoneRequiresApprovalAndMappedEvidence(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	err = Run([]string{"done"}, &stdout, &bytes.Buffer{})
+	err = Run([]string{"criteria", "satisfy", "evidence-recorded"}, &stdout, &bytes.Buffer{})
 	if err == nil {
-		t.Fatal("done should fail without approval and mapped evidence")
+		t.Fatal("criteria satisfy should require mapped evidence")
 	}
-	text := stdout.String()
-	if !strings.Contains(text, "approval is not approved") || !strings.Contains(text, "criterion evidence-recorded is satisfied without mapped evidence") {
-		t.Fatalf("done output missing terminal invariant failures:\n%s", text)
+	if text := err.Error(); !strings.Contains(text, "requires mapped evidence") || !strings.Contains(text, "kkt evidence --for evidence-recorded") {
+		t.Fatalf("criteria satisfy error should explain required evidence: %v", err)
 	}
 }
 
