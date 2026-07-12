@@ -1,6 +1,6 @@
 {
   "name": "@dannylee1020/kkt",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "KKT constrained-optimization workflow skills and CLI installer for coding agents.",
   "license": "Apache-2.0",
   "type": "module",
