@@ -753,7 +753,7 @@ uninstall_claude_hooks() {
     printf 'hooks claude: would remove KKT hooks from %s\n' "$settings_path"
     return
   fi
-  [ -f "$settings_path" ] || return
+  [ -f "$settings_path" ] || return 0
   command_exists python3 || fail "python3 is required to merge Claude hook settings."
   python3 - "$settings_path" <<'PY'
 import json
@@ -812,8 +812,8 @@ codex_config_has_kkt_toml_hooks() {
 
 uninstall_codex_toml_hooks() {
   local config_path="$1"
-  [ -f "$config_path" ] || return
-  codex_config_has_kkt_toml_hooks "$config_path" || return
+  [ -f "$config_path" ] || return 0
+  codex_config_has_kkt_toml_hooks "$config_path" || return 0
   if [ "$dry_run" = "true" ]; then
     printf 'hooks codex: would remove legacy KKT hooks from %s\n' "$config_path"
     return
