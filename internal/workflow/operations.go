@@ -137,6 +137,11 @@ func runArtifact(artifact string, args []string, stdout io.Writer) error {
 	if state.WorkspaceType == "plan" {
 		return runPlanArtifact(workspace, artifact, content, options.Method, stdout)
 	}
+	if artifact == "model" {
+		if issues := optimizationContractIssues(content); len(issues) > 0 {
+			return fmt.Errorf("model is not a complete constrained-optimization contract: %s", strings.Join(issues, "; "))
+		}
+	}
 	path, err := artifactPath(workspace, artifact)
 	if err != nil {
 		return err
@@ -176,9 +181,8 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 		return writeErr
 	}
 	if artifact == "model" {
-		missing := missingPlanModelFields(content)
-		if len(missing) > 0 {
-			return fmt.Errorf("plan model missing required fields: %s", strings.Join(missing, ", "))
+		if issues := optimizationContractIssues(content); len(issues) > 0 {
+			return fmt.Errorf("plan model is not a complete constrained-optimization contract: %s", strings.Join(issues, "; "))
 		}
 	}
 	if err := appendPlanStateEntry(workspace, artifact, content); err != nil {
@@ -197,34 +201,6 @@ func runPlanArtifact(workspace, artifact, content, method string, stdout io.Writ
 	}
 	fmt.Fprintf(stdout, "recorded: %s\n", artifact)
 	return nil
-}
-
-func missingPlanModelFields(content string) []string {
-	text := strings.ToLower(strings.ReplaceAll(content, "_", " "))
-	required := map[string][]string{
-		"objective_function":   {"objective function"},
-		"files_to_modify":      {"files to modify", "affected surfaces"},
-		"constraint_functions": {"constraint functions"},
-		"decision_variables":   {"decision variables"},
-		"validation_proof":     {"validation proof", "validation plan and proof"},
-	}
-	var missing []string
-	for _, field := range requiredPlanContractFields() {
-		if field == "planning_contract" {
-			continue
-		}
-		present := false
-		for _, accepted := range required[field] {
-			if strings.Contains(text, accepted) {
-				present = true
-				break
-			}
-		}
-		if !present {
-			missing = append(missing, field)
-		}
-	}
-	return missing
 }
 
 func runApprove(args []string, stdout io.Writer) error {
@@ -1111,7 +1087,7 @@ func markPlanContractComplete(workspace string) error {
 	if err != nil {
 		return err
 	}
-	fields := map[string]bool{}
+	fields := map[string]bool{"files_to_modify": true}
 	for _, field := range requiredPlanContractFields() {
 		if field != "planning_contract" {
 			fields[field] = true
@@ -1579,19 +1555,53 @@ func statusReport(workspace string, state State) (StatusReport, error) {
 	if err != nil {
 		return StatusReport{}, err
 	}
+	layers, err := layerStatuses(workspace)
+	if err != nil {
+		return StatusReport{}, err
+	}
+	guardrails := StatusCheck{OK: true}
+	if state.WorkspaceType != "plan" {
+		issues := validateGuardrails(workspace)
+		guardrails.OK = len(issues) == 0
+		guardrails.Issues = issues
+	}
 	report := StatusReport{
-		SchemaVersion: 1,
-		Workspace:     workspace,
-		Status:        state.Status,
-		ActiveLayer:   state.ActiveLayer,
-		Profile:       state.Profile,
-		Approval:      state.ApprovalStatus,
-		Validation:    validation,
-		StaleComplete: state.Status == "complete" && !validation.OK,
-		Next:          nextActionForWorkspace(workspace, state),
+		SchemaVersion:   1,
+		Workspace:       workspace,
+		WorkspaceType:   state.WorkspaceType,
+		ContractVersion: state.ContractVersion,
+		Status:          state.Status,
+		ActiveLayer:     state.ActiveLayer,
+		Profile:         state.Profile,
+		Approval:        state.ApprovalStatus,
+		Layers:          layers,
+		Validation:      validation,
+		Guardrails:      guardrails,
+		StaleComplete:   state.Status == "complete" && !validation.OK,
+		Next:            nextActionForWorkspace(workspace, state),
 	}
 	if loop, loopErr := readLoopState(workspace); loopErr == nil {
 		report.CurrentTask = loop.CurrentTask
+		report.TaskCounts = map[string]int{}
+		for _, task := range loop.Tasks {
+			report.TaskCounts[task.Status]++
+		}
+		report.CriterionCounts = map[string]int{}
+		for _, criterion := range loop.AcceptanceCriteria {
+			report.CriterionCounts[criterion.Status]++
+		}
+		report.EvidenceCount = len(loop.Evidence)
+		for _, stop := range loop.StopConditions {
+			if stop.Status == "active" {
+				report.ActiveStopConditions = append(report.ActiveStopConditions, stop.Text)
+			}
+		}
+		replay, replayErr := CheckReplay(workspace)
+		if replayErr != nil {
+			report.Replay = &StatusCheck{OK: false, Issues: []string{replayErr.Error()}}
+		} else {
+			report.Replay = &StatusCheck{OK: replay.OK, Issues: replay.Issues}
+		}
 	}
 	return report, nil
 }

@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill when modeling is already complete and the user wants implementation now. It is the execution tier between `$kkt-model` and `$kkt-loop`: richer than a compact plan, but lighter than a durable long-running loop.
 
-Read `references/kkt-kernel.md` and `references/state-contract.md` before acting. Read `references/feature-optimization-model.md` only when the completed model must be interpreted, repaired, or checked for drift. Read `references/plan-assimilation.md` only when the selected model used prior-plan assimilation. Read `references/discovery-tooling.md` only when verifying drift or missing facts. Read `references/layered-modeling-methods.md` only when reopening an incomplete model. Read `references/schemas.md` only when auditing full state or guardrail shapes.
+Read `references/kkt-kernel.md` and `references/state-contract.md` before acting. Read `references/feature-optimization-model.md` when the completed compressed model must be interpreted, and `references/deep-optimization-model.md` when the completed deep model must be interpreted, repaired, or checked for drift. Read `references/plan-assimilation.md` only when the selected model used prior-plan assimilation. Read `references/discovery-tooling.md` only when verifying drift or missing facts. Read `references/layered-modeling-methods.md` only when reopening an incomplete model. Read `references/schemas.md` only when auditing full state or guardrail shapes.
 
 ## Core Rule
 
@@ -31,7 +31,7 @@ kkt validate --run
 kkt done
 ```
 
-If no completed model workspace exists, switch back to `$kkt-model` instead of inventing one. If the work needs continuation, autonomous execution, multiple resumptions, task queues, or event replay, start from that completed model with `$kkt-loop` / `kkt loop from-model [model-workspace]` rather than adding loop machinery to a run workspace.
+If no completed compressed or deep model workspace exists, switch back to `$kkt` or `$kkt-model` instead of inventing one. If the work needs continuation, autonomous execution, multiple resumptions, task queues, or event replay, start from the selected model with `$kkt-loop` / `kkt loop from-model [model-workspace]` rather than adding loop machinery to a run workspace.
 
 ## Workflow
 

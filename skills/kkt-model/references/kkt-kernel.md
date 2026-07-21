@@ -8,7 +8,7 @@ Mandatory operating rules for every KKT skill. Keep this reference short enough 
 - Discover repo facts before asking for repo facts.
 - Treat prior plans as scaffold, not truth.
 - Check hard constraints before comparing candidates.
-- Choose the smallest feasible plan that satisfies the objective and preserves contracts.
+- Apply the constrained-optimization kernel even for small work; compress notation, never remove objective, variables, constraints, feasibility, optimum, binding constraints, or validation.
 - Get approval before mutation when the workflow requires it.
 - Validate with evidence before completion.
 - Re-optimize only when evidence changes facts, constraints, feasibility, selected decisions, or validation feasibility.

@@ -80,6 +80,27 @@ type GuardrailDriftPolicy struct {
 	Legacy  string   `json:"-"`
 }
 
+type guardrailConfigureOptions struct {
+	AllowedPaths       []string
+	AllowedSet         bool
+	BlockedPaths       []string
+	BlockedSet         bool
+	AcceptanceCriteria []string
+	AcceptanceSet      bool
+	RequiredCommands   []string
+	CommandsSet        bool
+	EvidenceRequired   []string
+	EvidenceSet        bool
+	StopConditions     []string
+	StopsSet           bool
+	BlockOn            []string
+	BlockOnSet         bool
+	WarnOn             []string
+	WarnOnSet          bool
+	Mode               string
+	ModeSet            bool
+}
+
 func (policy *GuardrailDriftPolicy) UnmarshalJSON(data []byte) error {
 	var legacy string
 	if err := json.Unmarshal(data, &legacy); err == nil {
@@ -163,6 +184,8 @@ func runGuardrails(args []string, stdout io.Writer) error {
 		}
 		fmt.Fprintln(stdout, "recorded: guardrails")
 		return nil
+	case "configure":
+		return runGuardrailConfigure(path, args[1:], workspace, stdout)
 	case "validate":
 		if len(args) > 1 {
 			return errors.New("guardrails validate accepts no content")
@@ -180,6 +203,161 @@ func runGuardrails(args []string, stdout io.Writer) error {
 	default:
 		return fmt.Errorf("unsupported guardrails action %q", action)
 	}
+}
+
+func runGuardrailConfigure(path string, args []string, workspace string, stdout io.Writer) error {
+	options, err := parseGuardrailConfigureArgs(args)
+	if err != nil {
+		return err
+	}
+	contract, err := readGuardrails(workspace)
+	if err != nil {
+		return err
+	}
+	if options.AllowedSet {
+		contract.ChangeBounds.AllowedPaths = options.AllowedPaths
+		contract.ChangeBounds.AllowedPathsOrSurfaces = nil
+	}
+	if options.BlockedSet {
+		contract.ChangeBounds.BlockedPaths = options.BlockedPaths
+		contract.ChangeBounds.BlockedPathsOrSurfaces = nil
+	}
+	if options.AcceptanceSet {
+		contract.Validation.AcceptanceCriteria = options.AcceptanceCriteria
+	}
+	if options.CommandsSet {
+		contract.Validation.RequiredCommands = options.RequiredCommands
+	}
+	if options.EvidenceSet {
+		contract.Validation.EvidenceRequired = options.EvidenceRequired
+	}
+	if options.StopsSet {
+		contract.StopConditions = options.StopConditions
+	}
+	if options.BlockOnSet {
+		contract.DriftPolicy.BlockOn = options.BlockOn
+		contract.DriftPolicy.Legacy = ""
+	}
+	if options.WarnOnSet {
+		contract.DriftPolicy.WarnOn = options.WarnOn
+	}
+	if options.ModeSet {
+		contract.Mode = options.Mode
+	}
+	if issues := validateCompleteGuardrailContract(contract); len(issues) > 0 {
+		for _, issue := range issues {
+			fmt.Fprintf(stdout, "- %s\n", issue)
+		}
+		return errors.New("guardrails contract is invalid")
+	}
+	payload, err := json.MarshalIndent(contract, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(payload, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := invalidateExecutionApproval(workspace, "guardrails changed"); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "configured: guardrails")
+	return nil
+}
+
+func parseGuardrailConfigureArgs(args []string) (guardrailConfigureOptions, error) {
+	options := guardrailConfigureOptions{}
+	for i := 0; i < len(args); i++ {
+		flag := args[i]
+		next := func() (string, error) {
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return "", fmt.Errorf("guardrails configure %s requires a value", flag)
+			}
+			return strings.TrimSpace(args[i]), nil
+		}
+		switch flag {
+		case "--allowed":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.AllowedPaths = append(options.AllowedPaths, splitCSV(value)...)
+			options.AllowedSet = true
+		case "--blocked":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.BlockedPaths = append(options.BlockedPaths, splitCSV(value)...)
+			options.BlockedSet = true
+		case "--acceptance":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.AcceptanceCriteria = append(options.AcceptanceCriteria, value)
+			options.AcceptanceSet = true
+		case "--command":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.RequiredCommands = append(options.RequiredCommands, value)
+			options.CommandsSet = true
+		case "--evidence":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.EvidenceRequired = append(options.EvidenceRequired, value)
+			options.EvidenceSet = true
+		case "--stop":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.StopConditions = append(options.StopConditions, value)
+			options.StopsSet = true
+		case "--block-on":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.BlockOn = append(options.BlockOn, splitCSV(value)...)
+			options.BlockOnSet = true
+		case "--warn-on":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			options.WarnOn = append(options.WarnOn, splitCSV(value)...)
+			options.WarnOnSet = true
+		case "--mode":
+			value, err := next()
+			if err != nil {
+				return guardrailConfigureOptions{}, err
+			}
+			if value != "observe" && value != "enforce" {
+				return guardrailConfigureOptions{}, fmt.Errorf("guardrails configure --mode must be observe or enforce")
+			}
+			options.Mode = value
+			options.ModeSet = true
+		default:
+			return guardrailConfigureOptions{}, fmt.Errorf("guardrails configure does not accept flag: %s", flag)
+		}
+	}
+	if !options.AllowedSet && !options.BlockedSet && !options.AcceptanceSet && !options.CommandsSet && !options.EvidenceSet && !options.StopsSet && !options.BlockOnSet && !options.WarnOnSet && !options.ModeSet {
+		return guardrailConfigureOptions{}, errors.New("guardrails configure requires at least one configuration flag")
+	}
+	options.AllowedPaths = uniqueStrings(options.AllowedPaths)
+	options.BlockedPaths = uniqueStrings(options.BlockedPaths)
+	options.AcceptanceCriteria = uniqueStrings(options.AcceptanceCriteria)
+	options.RequiredCommands = uniqueStrings(options.RequiredCommands)
+	options.EvidenceRequired = uniqueStrings(options.EvidenceRequired)
+	options.StopConditions = uniqueStrings(options.StopConditions)
+	options.BlockOn = uniqueStrings(options.BlockOn)
+	options.WarnOn = uniqueStrings(options.WarnOn)
+	return options, nil
 }
 
 func runRun(args []string, stdout io.Writer) error {
@@ -426,6 +604,7 @@ func executionContractReadinessIssues(workspace string, state State) []string {
 		return []string{err.Error()}
 	}
 	var issues []string
+	issues = append(issues, workspaceModelContractIssues(workspace)...)
 	for _, layer := range []string{"intent", "discovery", "modeling", "execution"} {
 		if statuses[layer] != "complete" {
 			status := statuses[layer]
@@ -922,6 +1101,11 @@ func updateExecutionSource(executionWorkspace, modelWorkspace, profile string) e
 }
 
 func markImportedModelLayers(executionWorkspace, modelWorkspace string) error {
+	if sourceState, err := ReadState(modelWorkspace); err == nil && sourceState.ContractVersion != "2" {
+		if err := updateTopLevelState(executionWorkspace, "contract_version", "legacy"); err != nil {
+			return err
+		}
+	}
 	source := modelWorkspace
 	if projectRootDir, err := projectRootForWorkspace(".", executionWorkspace); err == nil {
 		source = workspaceSourcePath(projectRootDir, modelWorkspace)

@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill for long-running, autonomous, or multi-step coding work where progress, evidence, and continuation state must survive across turns. It orchestrates a reusable KKT model contract through a durable execution loop: build that model from a fresh request or import a completed `$kkt-model` workspace.
 
-Read `references/kkt-kernel.md` and `references/state-contract.md` before acting. For fresh planning or re-optimization, also read `references/feature-optimization-model.md` and `references/layered-modeling-methods.md`; for a completed-model import, read the imported `model.md` and `guardrails.json` instead unless repair is needed. Read `references/plan-assimilation.md` only when prior plan text exists, `references/discovery-tooling.md` during fresh discovery, and `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes. If `ultragoal` is available, use its goal-state and continuation semantics as the runtime pattern.
+Read `references/kkt-kernel.md` and `references/state-contract.md` before acting. For fresh compact planning or re-optimization, read `references/feature-optimization-model.md`; read `references/deep-optimization-model.md` when decision complexity requires the deep contract. Read `references/layered-modeling-methods.md` when method selection is material; for a completed-model import, read the imported `model.md` and `guardrails.json` instead unless repair is needed. Read `references/plan-assimilation.md` only when prior plan text exists, `references/discovery-tooling.md` during fresh discovery, and `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes. If `ultragoal` is available, use its goal-state and continuation semantics as the runtime pattern.
 
 ## Core Rule
 
@@ -68,7 +68,7 @@ Loop workspaces use:
 5. Run the interactive intent checkpoint before deep discovery: after any quick inspection needed to avoid asking repo-fact questions, ask 1-3 owner-decision questions when goal, success, scope, risk, or tradeoff preference is still ambiguous. For large, high-risk, or especially ambiguous work, run a short Socratic pass.
 6. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
 7. Inspect relevant repo context and validation paths before writing the model. Use `rg` directly for broad text and file discovery, `ast-grep` directly for structural search when syntax matters, `git` for repository state, optional helpers and language-native commands when they provide stronger evidence.
-8. Select and record methods, then produce the canonical Optimized Plan Contract from `feature-optimization-model.md` at loop depth. Include enough execution implications to derive tasks, criteria, validation, and continuation policy.
+8. Select and record methods only when they materially affect the decision. Produce either the compressed constrained-optimization contract or the deep contract from `deep-optimization-model.md`, based on decision complexity. Include enough execution implications to derive tasks, criteria, validation, and continuation policy. Never omit feasibility, the selected optimum, binding constraints, or the validation certificate.
 9. Materialize the execution contract before approval: record `plan.md`, acceptance criteria, tasks, required validation evidence, and stop conditions. Fresh and imported loops use this same step; imported loops do not repeat deep modeling.
 10. Show the final model and complete execution contract, then get approval with `kkt approve`. It validates the model, guardrails, path bounds, plan, tasks, and criteria internally.
 11. When hook adapters are installed, run `kkt hooks arm --mode enforce` after approval. Hooks auto-disarm on `kkt done`, `kkt block`, or execution-contract invalidation.
@@ -85,7 +85,7 @@ Loop workspaces use:
 Execute the KKT workspace at the project root's `.kkt/loop/<slug>/plan.md`. Follow `kkt.yaml`, `model.md`, `guardrails.json`, `plan.md`, progress, evidence, and events. Use `kkt next` as the continuation control surface, `kkt task start` as the mutation gate, and `kkt done` as the finalize gate. Use `kkt resume`, `kkt status`, `kkt judge`, or `kkt replay` only to diagnose a reported block. Re-optimize only when evidence changes feasibility, and stop for a blocked transition, listed stop condition, proven acceptance criteria, or explicit user input.
 ```
 
-Do not set a token budget unless the user explicitly provides one.
+Do not set a token budget unless the user explicitly provides one. Optimize context by loading the current layer and selected contract representation first; do not reread all historical artifacts on every continuation.
 
 ## Stop Conditions
 

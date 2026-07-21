@@ -10,6 +10,33 @@ import (
 	"testing"
 )
 
+func testOptimizationModel(summary string) string {
+	return `## Objective Function
+Optimize the requested change while preserving the current public behavior.
+
+## Decision Variables and Affected Surfaces
+- Decision variables: implementation shape and validation scope.
+- Affected surfaces: internal workflow code and its tests.
+
+## Constraint Functions
+- Hard: preserve existing contracts and keep changes inside the modeled surfaces.
+- Soft: prefer the smallest maintainable implementation.
+
+## Candidate Feasibility
+- Feasible: ` + summary + `.
+- Rejected: broader changes that expand the requested scope.
+
+## Selected Optimum
+` + summary + `.
+
+## Binding Constraints
+The existing public contract and required validation commands constrain the change.
+
+## Validation Plan and Certificate
+Run the repository tests and inspect the final diff for scope and contract compliance.
+`
+}
+
 func TestRunPrintsVersion(t *testing.T) {
 	previous := Version
 	Version = "vtest"
@@ -67,7 +94,7 @@ func TestRunArtifactRecordsLayerMethodAndAdvances(t *testing.T) {
 		{"start", "model", "choose", "API", "shape"},
 		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
-		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"model", "--method", "ordinal_mcda", testOptimizationModel("Compared the feasible API shapes")},
 	}
 	for _, command := range commands {
 		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -170,6 +197,111 @@ func TestRunGuardrailsShowAndValidate(t *testing.T) {
 	}
 }
 
+func TestGuardrailsConfigurePatchesValidatedContract(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "run", "configure", "guardrails"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := Run([]string{"guardrails", "configure",
+		"--allowed", "internal/workflow/**,README.md",
+		"--blocked", ".env*,dist/**",
+		"--command", "go test ./...",
+		"--acceptance", "workflow tests pass",
+		"--evidence", "test output recorded",
+		"--stop", "scope expands",
+		"--block-on", "changed_blocked_path,validation_failed",
+		"--mode", "enforce",
+	}, &output, &bytes.Buffer{}); err != nil {
+		t.Fatalf("guardrails configure failed: %v\n%s", err, output.String())
+	}
+	if !strings.Contains(output.String(), "configured: guardrails") {
+		t.Fatalf("configure output = %q", output.String())
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract, err := readGuardrails(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := contract.ChangeBounds.AllowedPaths; len(got) != 2 || got[0] != "internal/workflow/**" || got[1] != "README.md" {
+		t.Fatalf("allowed paths = %#v", got)
+	}
+	if len(contract.Validation.RequiredCommands) != 1 || contract.Validation.RequiredCommands[0] != "go test ./..." {
+		t.Fatalf("required commands = %#v", contract.Validation.RequiredCommands)
+	}
+	if contract.Mode != "enforce" || !contract.Workflow.RequiresApprovalBeforeMutation || !contract.Workflow.RequiresValidationBeforeDone {
+		t.Fatalf("configuration changed protected workflow gates: %#v mode=%q", contract.Workflow, contract.Mode)
+	}
+	if issues := validateGuardrails(workspace); len(issues) != 0 {
+		t.Fatalf("configured guardrails should validate: %v", issues)
+	}
+}
+
+func TestStatusJSONIncludesWorkflowDiagnostics(t *testing.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run([]string{"start", "loop", "status", "diagnostics"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range [][]string{
+		{"task", "add", "Inspect status projection"},
+		{"criteria", "add", "Status exposes actionable diagnostics"},
+	} {
+		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var status bytes.Buffer
+	if err := Run([]string{"status", "--json"}, &status, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	text := status.String()
+	var payload map[string]any
+	if err := json.Unmarshal(status.Bytes(), &payload); err != nil {
+		t.Fatalf("status JSON is invalid: %v\n%s", err, text)
+	}
+	for _, want := range []string{
+		`"workspace_type": "loop"`,
+		`"contract_version": "2"`,
+		`"layers"`,
+		`"guardrails"`,
+		`"replay"`,
+		`"task_counts"`,
+		`"criterion_counts"`,
+		`"next"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("status JSON missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestRunGuardrailsSetRejectsInvalidContract(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
@@ -232,7 +364,7 @@ func TestRunFromModelCreatesApprovalGatedRun(t *testing.T) {
 		{"start", "model", "choose", "API", "shape"},
 		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
-		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"model", "--method", "ordinal_mcda", testOptimizationModel("Compared the feasible API shapes")},
 		{"guardrails", "set", testGuardrailsJSON("model", []string{"internal/workflow/**"}, nil)},
 		{"done", "Model complete"},
 	}
@@ -356,7 +488,7 @@ func TestLoopFromModelCreatesApprovalGatedLoop(t *testing.T) {
 		{"start", "model", "migrate", "workflow", "state"},
 		{"intent", "--method", "why_how", "Clarified migration tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped workflow callers"},
-		{"model", "--method", "ordinal_mcda", "Selected a staged migration"},
+		{"model", "--method", "ordinal_mcda", testOptimizationModel("Selected the staged migration")},
 		{"guardrails", "set", testGuardrailsJSON("model", []string{"internal/workflow/**"}, nil)},
 		{"done", "Model complete"},
 	}
@@ -504,7 +636,7 @@ func TestModelChangeRequiresReplannedExecutionBeforeApproval(t *testing.T) {
 	}
 	startValidationRunWorkspace(t, nil)
 
-	if err := Run([]string{"model", "--method", "lexicographic", "Selected revised execution model"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+	if err := Run([]string{"model", "--method", "lexicographic", testOptimizationModel("Selected the revised execution model")}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	workspace, err := ResolveWorkspace(".", "")
@@ -556,7 +688,7 @@ func TestRunJudgeAllowsUnrelatedChangedPathOutsideAllowedBounds(t *testing.T) {
 		{"start", "run", "path", "scope"},
 		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
-		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the workflow-only plan")},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
 		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
@@ -599,7 +731,7 @@ func TestRunJudgeAllowsChangedPathInsideAllowedBounds(t *testing.T) {
 		{"start", "run", "path", "scope"},
 		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
-		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the workflow-only plan")},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
 		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
@@ -648,7 +780,7 @@ func TestApprovalBaselineAndUnrelatedDirtyPathDoNotBlock(t *testing.T) {
 		{"start", "run", "path", "scope"},
 		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
 		{"discovery", "--method", "traceability_matrix", "Expected workflow-only change"},
-		{"model", "--method", "lexicographic", "Selected workflow-only plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the workflow-only plan")},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"internal/workflow/**"}, nil)},
 		{"plan", "Execute the selected workflow-only plan."},
 		{"approve", "Approved workflow-only scope"},
@@ -699,7 +831,7 @@ func TestRunJudgeBlockedPathOverridesAllowedBounds(t *testing.T) {
 		{"start", "run", "path", "scope"},
 		{"intent", "--method", "goal_anti_goal", "Captured path scope"},
 		{"discovery", "--method", "traceability_matrix", "Expected broad change"},
-		{"model", "--method", "lexicographic", "Selected broad plan with README blocked"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the broad plan with README blocked")},
 		{"guardrails", "set", testGuardrailsJSON("run", []string{"**"}, []string{"README.md"})},
 		{"plan", "Execute the selected broad plan."},
 		{"approve", "Approved broad scope"},
@@ -744,7 +876,7 @@ func TestRunRejectsDailyProfile(t *testing.T) {
 	}
 }
 
-func TestStartRunEmitsDeprecationWarning(t *testing.T) {
+func TestStartRunCreatesCompactDurableWorkspace(t *testing.T) {
 	root := t.TempDir()
 	previous, err := os.Getwd()
 	if err != nil {
@@ -763,8 +895,19 @@ func TestStartRunEmitsDeprecationWarning(t *testing.T) {
 	if err := Run([]string{"start", "run", "legacy", "workflow"}, &stdout, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if text := stdout.String(); !strings.Contains(text, "start run is deprecated") || !strings.Contains(text, "run from-model") {
-		t.Fatalf("start run should explain the canonical import path:\n%s", text)
+	if text := stdout.String(); strings.Contains(text, "deprecated") || strings.Contains(text, "warning:") || strings.Contains(text, "run from-model") {
+		t.Fatalf("start run should be a supported direct workflow without deprecation output:\n%s", text)
+	}
+	workspace, err := ResolveWorkspace(".", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := ReadState(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.WorkspaceType != "run" || state.ContractVersion != "2" {
+		t.Fatalf("direct run state = %#v, want run contract version 2", state)
 	}
 }
 
@@ -787,7 +930,7 @@ func TestTaskStartEnforcesApprovalAtTransition(t *testing.T) {
 		{"start", "loop", "gate", "task", "start"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -824,7 +967,7 @@ func TestNextBlocksReplayDrift(t *testing.T) {
 		{"start", "loop", "detect", "replay", "drift"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -907,7 +1050,7 @@ func TestPlanArtifactCommandsStayInStateFile(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "plan", "make", "the", "CLI", "durable"},
-		{"model", "objective_function: keep plan state compact; files_to_modify: workflow state only; constraint_functions: preserve lean kkt tier; decision_variables: typed inline contract; validation_proof: go test ./..."},
+		{"model", testOptimizationModel("Keep plan state compact with a typed inline contract")},
 		{"evidence", "validated by inspection"},
 	}
 	for _, command := range commands {
@@ -995,7 +1138,7 @@ func TestPlanDonePerformsFinalizeWithoutManualJudge(t *testing.T) {
 
 	commands := [][]string{
 		{"start", "plan", "make", "compact", "planning", "complete"},
-		{"model", "## Objective Function\nComplete compact planning.\n## Known Constraints\n- Explicit: none.\n## Decision Variables\nNone — fixed workflow.\n## Affected Surfaces\nWorkflow state.\n## Constraint Functions\n- Hard: preserve the simple plan tier.\n## Candidate Feasibility\n- Feasible: compact contract.\n## Selected Plan\nRecord the compact contract.\n## Binding Constraints\nMinimal durable state.\n## Validation Plan and Proof\ngo test ./...\n## Execution Implications\nNone.\n## Guardrail Variables\nNone.\n## Analysis Extensions\nNone.\n## Residual Risk\nValidation command availability."},
+		{"model", "## Objective Function\nComplete compact planning.\n## Known Constraints\n- Explicit: none.\n## Decision Variables\nNone — fixed workflow.\n## Affected Surfaces\nWorkflow state.\n## Constraint Functions\n- Hard: preserve the simple plan tier.\n- Soft: minimize durable state and ceremony.\n## Candidate Feasibility\n- Feasible: compact contract.\n## Selected Plan\nRecord the compact contract.\n## Binding Constraints\nMinimal durable state.\n## Validation Plan and Proof\ngo test ./...\n## Execution Implications\nNone.\n## Guardrail Variables\nNone.\n## Analysis Extensions\nNone.\n## Residual Risk\nValidation command availability."},
 		{"approve", "Approved compact plan"},
 		{"evidence", "Compact-plan evidence recorded."},
 		{"done", "Compact plan complete"},
@@ -1067,7 +1210,7 @@ func TestRunLoopCommandLifecycle(t *testing.T) {
 		{"start", "loop", "upgrade", "kkt", "loop"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -1164,7 +1307,7 @@ func TestRunNextRequiresExecutionContractAfterLoopModel(t *testing.T) {
 		{"start", "loop", "approval", "after", "model"},
 		{"intent", "--method", "goal_anti_goal", "Captured goal and anti-goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped implementation surfaces"},
-		{"model", "--method", "lexicographic", "Selected feasible plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the feasible plan")},
 	}
 	for _, command := range commands {
 		if err := Run(command, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -1239,7 +1382,7 @@ func TestRunNextJSONAndReplayCheck(t *testing.T) {
 		{"start", "loop", "add", "replay", "check"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -1284,7 +1427,7 @@ func TestRunResumeIncludesContinuationPacket(t *testing.T) {
 		{"start", "loop", "resume", "context"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -1330,7 +1473,7 @@ func TestCriteriaSatisfyRequiresMappedEvidence(t *testing.T) {
 		{"start", "loop", "prove", "terminal", "validation"},
 		{"intent", "--method", "goal_anti_goal", "Captured loop goal"},
 		{"discovery", "--method", "traceability_matrix", "Mapped loop state"},
-		{"model", "--method", "lexicographic", "Selected loop plan"},
+		{"model", "--method", "lexicographic", testOptimizationModel("Selected the loop plan")},
 		{"plan", "Execute the selected loop plan."},
 		{"task", "add", "Inspect code"},
 		{"criteria", "add", "Evidence recorded"},
@@ -1609,7 +1752,7 @@ func startValidationModelWorkspace(t *testing.T, requiredCommands []string) stri
 		{"start", "model", "choose", "API", "shape"},
 		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
-		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"model", "--method", "ordinal_mcda", testOptimizationModel("Compared the feasible API shapes")},
 		{"guardrails", "set", testGuardrailsJSONWithCommands("model", []string{"**"}, nil, requiredCommands)},
 	}
 	for _, command := range commands {
@@ -1635,7 +1778,7 @@ func startValidationRunWorkspaceWithBounds(t *testing.T, requiredCommands, allow
 		{"start", "run", "execute", "selected", "model"},
 		{"intent", "--method", "why_how", "Clarified owner tradeoffs"},
 		{"discovery", "--method", "coupling_map", "Mapped affected API callers"},
-		{"model", "--method", "ordinal_mcda", "Compared feasible API shapes"},
+		{"model", "--method", "ordinal_mcda", testOptimizationModel("Compared the feasible API shapes")},
 		{"guardrails", "set", testGuardrailsJSONWithCommands("run", allowedPaths, blockedPaths, requiredCommands)},
 		{"plan", "Run selected validation model."},
 		{"approve", "Approved validation run"},

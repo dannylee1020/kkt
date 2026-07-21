@@ -17,9 +17,8 @@ Usage:
   kkt --version
 
 Workspace creation:
-  kkt start plan|model|loop <request>
-  kkt start run <request>                         deprecated; prefer run from-model
-  kkt run from-model [model-workspace]
+  kkt start plan|model|loop|run <request>
+  kkt run from-model [model-workspace]            import a completed model for bounded execution
   kkt loop from-model [model-workspace]
 
 Record planning and execution state:
@@ -27,7 +26,7 @@ Record planning and execution state:
   kkt plan|progress [content]
   kkt evidence [--for criterion] [--command command] [content]
   kkt notes [content]
-  kkt guardrails show|set|validate [content]
+  kkt guardrails show|set|configure|validate [content]
   kkt task [add|start|done|skip|block] [task]
   kkt criteria [add|satisfy|block] [criterion]
 
@@ -165,10 +164,6 @@ func runStart(args []string, stdout io.Writer) error {
 	request := strings.TrimSpace(strings.Join(args[1:], " "))
 	if request == "" {
 		return errors.New("start requires a request")
-	}
-
-	if selectedProfile == "run" {
-		fmt.Fprintln(stdout, "warning: kkt start run is deprecated; prefer kkt run from-model [model-workspace]")
 	}
 
 	workspace, err := StartWorkflow(".", request, selectedProfile)
@@ -360,12 +355,12 @@ func firstArg(args []string) string {
 func startInstruction(profile string) string {
 	switch profile {
 	case "plan":
-		return "inspect relevant code/docs, record the canonical Optimized Plan Contract with kkt model, then request approval before edits"
+		return "inspect relevant code/docs, record the compressed or deep constrained-optimization contract with kkt model, then request approval before edits"
 	case "model":
 		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery"
 	case "run":
-		return "deprecated direct run workspace: record or import the selected model, materialize the execution plan, then request approval before edits"
+		return "record the compact constrained-optimization model and execution plan, then request approval before edits"
 	default:
-		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record discovery, model, execution plan, tasks, and criteria before approval"
+		return "record adaptive intent with kkt intent --method <method>, then inspect relevant code/docs and record the constrained-optimization contract, execution plan, tasks, and criteria before approval"
 	}
 }

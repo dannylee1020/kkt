@@ -6,9 +6,9 @@ license: Apache-2.0
 
 # KKT
 
-Use this skill for ordinary coding work that needs stricter planning than default plan mode. Apply constrained optimization as a discipline: choose the best feasible implementation given what must stay true.
+Use this skill for ordinary coding work that needs stricter planning than default plan mode. Every request still applies KKT's constrained-optimization kernel: formulate the objective, variables, constraints, feasible candidates, selected optimum, binding constraints, and validation certificate. Compress the representation for routine work; never replace optimization with a checklist.
 
-Read `references/kkt-kernel.md` before acting. Read `references/feature-optimization-model.md` when building the compact model. Read `references/state-contract.md` only when optional plan-tier durable state is explicitly needed. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during non-trivial discovery or structural search. Read `references/layered-modeling-methods.md` only when method selection beyond the plan profile is needed. Read `references/schemas.md` only when a full copyable state, guardrail, or layer-output shape is needed.
+Read `references/kkt-kernel.md` before acting and `references/feature-optimization-model.md` when modeling. Use the compressed contract by default; read `references/deep-optimization-model.md` only when decision complexity or risk requires deep modeling. Read `references/state-contract.md` only when optional plan-tier durable state is explicitly needed. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during non-trivial discovery or structural search. Read `references/layered-modeling-methods.md` only when method selection beyond the default is material. Read `references/schemas.md` only when a full copyable state, guardrail, or layer-output shape is needed.
 
 ## Core Rule
 
@@ -26,7 +26,7 @@ When optional plan-tier persistence is justified, use the `kkt` CLI. The skill o
 
 ```text
 kkt start plan "<user request>"
-kkt model "<canonical Optimized Plan Contract>"
+kkt model "<compressed or deep constrained-optimization contract>"
 kkt approve "<approved scope>"
 kkt evidence "<validation evidence>"
 kkt validate [--run]
@@ -42,7 +42,7 @@ If `kkt` is missing and optional durable plan-tier state is required, stop and a
 3. Apply the owner-decision filter before asking: inspect discoverable facts locally, assume low-risk reversible defaults, ask only for owner decisions, and stop for blocking unknowns.
 4. Inspect relevant code, docs, tests, config, schemas, routes, UI, infra, logs, or issues before forming the model. Use `rg` directly for broad text and file discovery, `ast-grep` directly for structural search when syntax matters, `git` for repository state, and language-native commands when they provide stronger evidence.
 5. Separate explicit user statements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
-6. Produce the canonical Optimized Plan Contract from `feature-optimization-model.md` at compact depth: concise entries, material alternatives only, and `Analysis Extensions` usually `None`.
+6. Produce the compressed constrained-optimization contract from `feature-optimization-model.md` by default. Escalate to the deep contract in `deep-optimization-model.md` when material alternatives, high risk, cross-module coupling, or unresolved owner decisions make the compact representation insufficient.
 7. Derive the execution contract: acceptance criteria, validation plan, evidence required, and stop conditions.
 8. Reject infeasible plans, then choose the best feasible plan by this order: user request, correctness/security/data/public contracts, blast radius, existing architecture, maintainability, validation clarity.
 9. Show the final modeling result and wait for approval before editing.
@@ -52,7 +52,7 @@ If `kkt` is missing and optional durable plan-tier state is required, stop and a
 
 For ordinary `$kkt` tasks, keep the model brief and do not create durable state by default. For optional durable plan-tier state, use project-root `.kkt/kkt.yaml` through `kkt` commands; do not hand-edit `kkt.yaml` as the primary workflow operation. Load full schemas only when writing or auditing durable state. Switch to `$kkt-model` for deeper non-mutating modeling, then use `$kkt-run` / `kkt run from-model` for bounded implementation or `$kkt-loop` / `kkt loop from-model` for long-running continuation.
 
-Before implementation, expose the canonical Optimized Plan Contract at compact depth. Keep formal method names hidden unless they explain a material tradeoff.
+Before implementation, expose the selected constrained-optimization contract. Keep ordinary output to the seven kernel sections; keep formal method names hidden unless they materially affect candidate selection. Never omit feasibility, the selected optimum, binding constraints, or validation proof.
 
 Final audit shape:
 

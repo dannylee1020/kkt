@@ -194,8 +194,8 @@ OpenCode:    ask OpenCode to use the relevant kkt skill
 
 | workflow | use it for | what it produces | durable state |
 | --- | --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | compact model, approval, implementation, validation | none by default; optional `.kkt/kkt.yaml` only by explicit need |
-| `$kkt-model` | architecture choices and tradeoff analysis | reusable selected model or decision brief | `.kkt/model/<slug>/` |
+| `$kkt` | normal feature work, bug fixes, and refactors | compressed constrained-optimization contract, approval, implementation, validation | none by default; optional `.kkt/kkt.yaml` only by explicit need |
+| `$kkt-model` | architecture choices and tradeoff analysis | deep constrained-optimization model with alternatives and sensitivity | `.kkt/model/<slug>/` |
 | `$kkt-run` | bounded implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
 | `$kkt-loop` | fresh long-running work or iterative execution of a completed model | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
 
@@ -222,13 +222,17 @@ plan output --> extract signals --> classify claims --> verify facts --> optimiz
 
 Plan claims do not become KKT facts until KKT verifies them or explicitly carries them as assumptions.
 
-Before edits, the selected model should name:
+Before edits, every selected model must preserve KKT's optimization kernel:
 
 - objective function
-- files or surfaces to modify
+- decision variables and affected surfaces
 - hard and soft constraint functions
-- decision variables with chosen values
-- validation proof required for completion
+- feasible and rejected candidates
+- selected optimum
+- binding constraints
+- validation certificate required for completion
+
+Routine work uses a compressed contract. Architecture, high-risk, ambiguous, or materially multi-option work uses the deep contract.
 
 Expected final audit:
 
@@ -248,7 +252,7 @@ Reference command groups:
 
 ```bash
 # workspace creation
-kkt start plan|model|loop "<request>"
+kkt start plan|model|loop|run "<request>"
 kkt run from-model [model-workspace]
 kkt loop from-model [model-workspace]
 
@@ -257,6 +261,7 @@ kkt intent
 kkt discovery
 kkt model
 kkt guardrails set '<json>'
+kkt guardrails configure --allowed '<paths>' --command '<validation command>'
 kkt plan
 kkt task
 kkt criteria
@@ -280,9 +285,11 @@ kkt hooks
 kkt hook
 ```
 
-Run `kkt help` for exact syntax. Transition commands enforce their own readiness checks: `approve` validates model readiness, `next` validates run mutation readiness and loop continuation, `task start` validates loop mutation readiness, and `done` validates finalization. Use `status`, `judge`, `guardrails validate`, and `replay` to diagnose a block rather than as required happy-path ceremony. `kkt start run` remains available for compatibility but is deprecated; use `kkt run from-model`.
+Run `kkt help` for exact syntax. Transition commands enforce their own readiness checks: `approve` validates model readiness, `next` validates run mutation readiness and loop continuation, `task start` validates loop mutation readiness, and `done` validates finalization. Use `status`, `judge`, `guardrails validate`, and `replay` to diagnose a block rather than as required happy-path ceremony. `kkt start run` is the compact direct-execution workflow; use `kkt run from-model` when importing a completed model.
 
-Ordinary `$kkt` tasks stay chat-first by default. Durable workflow state, when used, lives under the project root's `.kkt/`; deeper `model`, `run`, and `loop` workflows use that directory for artifacts, guardrails, evidence, and replayable progress. Discovery still uses normal agent tools such as search, shell commands, and repo-native language tooling rather than a KKT-specific discovery command.
+`kkt status --json` exposes the active layer map, contract version, validation and guardrail checks, loop replay state, task/criterion counts, evidence count, active stop conditions, and next action. Use `kkt guardrails configure` for validated flag-based updates such as `--allowed`, `--blocked`, `--command`, `--evidence`, `--acceptance`, `--stop`, `--block-on`, `--warn-on`, and `--mode`; raw `guardrails set` remains available for complete JSON contracts.
+
+Ordinary `$kkt` tasks stay chat-first by default. They still apply constrained optimization; only the representation is compressed. Durable workflow state, when used, lives under the project root's `.kkt/`; deeper `model`, `run`, and `loop` workflows use that directory for artifacts, guardrails, evidence, and replayable progress. Discovery still uses normal agent tools such as search, shell commands, and repo-native language tooling rather than a KKT-specific discovery command.
 
 ## Hooks
 

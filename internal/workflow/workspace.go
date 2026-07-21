@@ -18,12 +18,13 @@ type Workspace struct {
 }
 
 type State struct {
-	SchemaVersion  string
-	WorkspaceType  string
-	Profile        string
-	Status         string
-	ActiveLayer    string
-	ApprovalStatus string
+	SchemaVersion   string
+	ContractVersion string
+	WorkspaceType   string
+	Profile         string
+	Status          string
+	ActiveLayer     string
+	ApprovalStatus  string
 }
 
 type ValidationResult struct {
@@ -31,17 +32,31 @@ type ValidationResult struct {
 	Issues []string
 }
 
+type StatusCheck struct {
+	OK     bool     `json:"ok"`
+	Issues []string `json:"issues,omitempty"`
+}
+
 type StatusReport struct {
-	SchemaVersion int              `json:"schema_version"`
-	Workspace     string           `json:"workspace"`
-	Status        string           `json:"status"`
-	ActiveLayer   string           `json:"active_layer"`
-	Profile       string           `json:"profile"`
-	Approval      string           `json:"approval"`
-	CurrentTask   string           `json:"current_task,omitempty"`
-	Validation    ValidationResult `json:"validation"`
-	StaleComplete bool             `json:"stale_complete"`
-	Next          NextAction       `json:"next"`
+	SchemaVersion        int               `json:"schema_version"`
+	Workspace            string            `json:"workspace"`
+	WorkspaceType        string            `json:"workspace_type"`
+	ContractVersion      string            `json:"contract_version,omitempty"`
+	Status               string            `json:"status"`
+	ActiveLayer          string            `json:"active_layer"`
+	Profile              string            `json:"profile"`
+	Approval             string            `json:"approval"`
+	Layers               map[string]string `json:"layers"`
+	CurrentTask          string            `json:"current_task,omitempty"`
+	Validation           ValidationResult  `json:"validation"`
+	Guardrails           StatusCheck       `json:"guardrails"`
+	Replay               *StatusCheck      `json:"replay,omitempty"`
+	TaskCounts           map[string]int    `json:"task_counts,omitempty"`
+	CriterionCounts      map[string]int    `json:"criterion_counts,omitempty"`
+	EvidenceCount        int               `json:"evidence_count,omitempty"`
+	ActiveStopConditions []string          `json:"active_stop_conditions,omitempty"`
+	StaleComplete        bool              `json:"stale_complete"`
+	Next                 NextAction        `json:"next"`
 }
 
 func StartWorkflow(root, request, profile string) (Workspace, error) {
@@ -101,7 +116,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop, kkt run from-model, or kkt loop from-model first")
+			return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop|run, kkt run from-model, or kkt loop from-model first")
 		}
 		return "", err
 	}
@@ -137,7 +152,7 @@ func ResolveWorkspace(root, candidate string) (string, error) {
 		}
 	}
 	if len(dirs) == 0 {
-		return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop, kkt run from-model, or kkt loop from-model first")
+		return "", errors.New("no .kkt workspace found; run kkt start plan|model|loop|run, kkt run from-model, or kkt loop from-model first")
 	}
 	sort.Slice(dirs, func(i, j int) bool {
 		return dirs[i].sortKey < dirs[j].sortKey
@@ -200,6 +215,8 @@ func ReadState(workspace string) (State, error) {
 		switch key {
 		case "schema_version":
 			state.SchemaVersion = value
+		case "contract_version":
+			state.ContractVersion = value
 		case "workspace_type":
 			state.WorkspaceType = value
 		case "profile":
@@ -229,14 +246,14 @@ func NextInstruction(state State) string {
 		return "next: record adaptive intent with kkt intent --method <method>, then inspect the repo and record discovery with kkt discovery --method <method>"
 	case "discovery":
 		if state.WorkspaceType == "plan" {
-			return "next: inspect the repo, then record the canonical Optimized Plan Contract with kkt model before edits"
+			return "next: inspect the repo, then record the compressed or deep constrained-optimization contract with kkt model before edits"
 		}
 		return "next: record discovery with repo facts, constraints, validation paths, and unknowns using kkt discovery --method <method>"
 	case "modeling":
 		if state.WorkspaceType == "plan" {
-			return "next: record the canonical Optimized Plan Contract with kkt model; then get explicit approval before edits"
+			return "next: record the compressed or deep constrained-optimization contract with kkt model; then get explicit approval before edits"
 		}
-		return "next: record the selected model with kkt model --method <method>, show it, and get explicit approval before edits"
+		return "next: record the selected constrained-optimization model with kkt model --method <method>, show it, and get explicit approval before edits"
 	case "execution":
 		if state.WorkspaceType == "loop" && state.ApprovalStatus != "approved" {
 			return "next: record plan.md, tasks, and acceptance criteria, then get approval before execution"
@@ -277,6 +294,12 @@ func ValidateWorkspace(workspace string) (ValidationResult, error) {
 	}
 	if state.WorkspaceType == "plan" {
 		for _, issue := range planContractIssues(workspace) {
+			result.OK = false
+			result.Issues = append(result.Issues, issue)
+		}
+	}
+	if state.WorkspaceType == "model" || state.WorkspaceType == "run" || state.WorkspaceType == "loop" {
+		for _, issue := range workspaceModelContractIssues(workspace) {
 			result.OK = false
 			result.Issues = append(result.Issues, issue)
 		}
@@ -365,8 +388,12 @@ func planContractIssues(workspace string) []string {
 		return []string{err.Error()}
 	}
 	text := string(content)
+	fields := requiredPlanContractFields()
+	if !strings.Contains(text, "candidate_feasibility:") && !strings.Contains(text, "selected_optimum:") && !strings.Contains(text, "binding_constraints:") {
+		fields = legacyPlanContractFields()
+	}
 	var issues []string
-	for _, field := range requiredPlanContractFields() {
+	for _, field := range fields {
 		if !strings.Contains(text, field+":") {
 			issues = append(issues, "missing plan contract field "+field)
 			continue
@@ -469,6 +496,20 @@ func requiredPlanContractFields() []string {
 	return []string{
 		"planning_contract",
 		"objective_function",
+		"decision_variables",
+		"affected_surfaces",
+		"constraint_functions",
+		"candidate_feasibility",
+		"selected_optimum",
+		"binding_constraints",
+		"validation_proof",
+	}
+}
+
+func legacyPlanContractFields() []string {
+	return []string{
+		"planning_contract",
+		"objective_function",
 		"files_to_modify",
 		"constraint_functions",
 		"decision_variables",
@@ -481,6 +522,7 @@ func stateYAML(request, profile string, now time.Time) string {
 	if profile == "plan" {
 		return fmt.Sprintf(`schema_version: 1
 workflow_type: kkt
+contract_version: 2
 workspace_type: plan
 profile: plan
 status: modeling
@@ -508,6 +550,9 @@ planning_contract:
   files_to_modify:
     status: pending
     items: []
+  affected_surfaces:
+    status: pending
+    items: []
   constraint_functions:
     status: pending
     hard: []
@@ -515,6 +560,15 @@ planning_contract:
   decision_variables:
     status: pending
     items: []
+  candidate_feasibility:
+    status: pending
+    summary: ""
+  selected_optimum:
+    status: pending
+    summary: ""
+  binding_constraints:
+    status: pending
+    summary: ""
   validation_proof:
     status: pending
     commands: []
@@ -534,6 +588,7 @@ stop_conditions:
 	if profile == "model" {
 		return fmt.Sprintf(`schema_version: 1
 workflow_type: kkt
+contract_version: 2
 workspace_type: model
 profile: model
 status: modeling
@@ -575,6 +630,7 @@ stop_conditions:
 	if profile == "run" {
 		return fmt.Sprintf(`schema_version: 1
 workflow_type: kkt
+contract_version: 2
 workspace_type: run
 profile: run
 status: modeling
@@ -631,6 +687,7 @@ stop_conditions:
 	}
 	return fmt.Sprintf(`schema_version: 1
 workflow_type: kkt
+contract_version: 2
 workspace_type: loop
 profile: loop
 status: modeling

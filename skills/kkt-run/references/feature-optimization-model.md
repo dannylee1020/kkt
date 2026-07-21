@@ -1,84 +1,67 @@
-# Optimized Plan Contract
+# Constrained Optimization Contract
 
-Use this reference whenever a KKT skill creates, reviews, or repairs a plan. It is the one planning-output contract for compact `$kkt`, fresh `$kkt-loop`, and deep `$kkt-model` work. `schemas.md` is only its optional serialization reference.
+KKT is not a checklist. Every planning path must apply the same constrained-optimization kernel, even when the representation is compressed.
 
-## Intake
+## Optimization Kernel
 
-Capture user goal, desired behavior, user-visible success, scope boundary, examples, priorities, explicit constraints, and execution mode. Let discovery establish repo facts. Treat prior-plan claims as assumptions or candidates until verified.
+1. Define the objective.
+2. Define decision variables and affected surfaces.
+3. Formulate hard constraints and soft preferences.
+4. Identify feasible and rejected candidates.
+5. Select the best feasible implementation.
+6. Identify binding constraints.
+7. Define the validation certificate.
 
-## Required Shape
+The agent owns modeling judgment. The CLI verifies contract structure and deterministic workflow state; it does not invent candidates or choose the optimum.
 
-Return these sections in this exact order. Do not omit a section: write `None — <reason>` when it is irrelevant.
+## Compressed Contract
+
+The default `$kkt` representation is concise but must contain every kernel stage:
 
 ```markdown
 ## Objective Function
 
-## Known Constraints
-- Explicit:
-- Discovered:
-- Inferred:
-- Assumptions:
-
-## Decision Variables
-
-## Affected Surfaces
+## Decision Variables and Affected Surfaces
 
 ## Constraint Functions
 - Hard:
 - Soft:
 
 ## Candidate Feasibility
-- Feasible:
-- Rejected:
 
-## Selected Plan
+## Selected Optimum
 
 ## Binding Constraints
 
-## Validation Plan and Proof
-
-## Execution Implications
-
-## Guardrail Variables
-
-## Analysis Extensions
-
-## Residual Risk
+## Validation Plan and Certificate
 ```
 
-Meaning:
+Rules:
 
-- **Decision Variables** name the allowed choices, domains, selected values, and rationale.
-- **Affected Surfaces** name expected changed and protected files, modules, APIs, data, docs, or operations.
-- **Candidate Feasibility** rejects hard-constraint violations before comparing viable choices.
-- **Validation Plan and Proof** names commands, checks, artifacts, or explicit limits needed to prove completion.
-- **Execution Implications** states what run or loop must materialize; it is not the execution contract itself.
-- **Guardrail Variables** states modeled constraints, allowed paths, blocked paths, required validation, and drift policy when durable execution is used.
-- **Analysis Extensions** holds method rationale, discovery confidence, coupling, sensitivity, or owner-decision analysis.
+- Keep each section to the smallest useful statement.
+- Do not emit empty sections.
+- Do not invent alternatives when discovery leaves one feasible candidate; state why it is the only feasible candidate.
+- Reject candidates that violate hard constraints before selecting the optimum.
+- Explain method names only when they materially affect the choice.
+- Validation is the certificate that the selected optimum satisfies the model.
 
-## Feasibility and Selection
+## Deep Contract
 
-Hard constraints include explicit non-goals, correctness, security, privacy, data integrity, public contracts, runtime limits, and unapproved destructive or external actions. Soft constraints rank feasible candidates in this order:
-
-1. Satisfy the user request.
-2. Preserve correctness, security, data integrity, and public contracts.
-3. Minimize blast radius.
-4. Match existing architecture.
-5. Improve maintainability where cheap.
-6. Prefer clear validation.
-
-Do not invent numeric scores for subjective qualities.
+Use the full contract in `deep-optimization-model.md` for architecture choices, material alternatives, high-risk changes, unresolved owner tradeoffs, or substantial cross-module work.
 
 ## Profile Depth
 
-- **Compact (`kkt`)**: concise entries; only material alternatives; `Analysis Extensions` is usually `None`.
-- **Loop (`kkt-loop`, fresh)**: the same shape, with enough staging, validation, and continuation implications to derive the execution contract.
-- **Deep (`kkt-model`)**: the same shape, with serious alternatives, method rationale, coupling, sensitivity, and unresolved owner decisions in `Analysis Extensions`.
+- `$kkt`: compressed contract by default; escalate when decision complexity or risk requires it.
+- `$kkt-model`: deep contract with alternatives, coupling, sensitivity, and owner decisions.
+- `$kkt-run`: execute a completed compressed or deep model without re-modeling.
+- `$kkt-loop`: use a compressed or deep model based on decision complexity; retain durable execution state.
+
+Task duration does not by itself require deep modeling. A short security or migration change may require deep modeling; a long but straightforward change may use the compressed contract.
 
 ## Execution Boundary
 
-The Optimized Plan Contract selects the feasible implementation. Run and loop then materialize a separate execution contract: ordered steps, acceptance criteria, validation plan, evidence required, stop conditions, and continuation policy. Do not put mutable task progress in the optimized plan.
+The selected model chooses the feasible implementation. Execution plans may add sequencing, tasks, acceptance criteria, stop conditions, and validation commands, but must not replace or silently rewrite the optimization model.
 
 ## Re-Optimization
 
-Re-optimize only when evidence changes system facts, feasible candidates, hard constraints, selected decisions, binding constraints, or validation feasibility. A material contract change invalidates execution approval.
+Re-optimize only when evidence changes the objective, constraints, feasible candidates, selected optimum, binding constraints, or validation feasibility. Preference alone is not a reason to restart the model.

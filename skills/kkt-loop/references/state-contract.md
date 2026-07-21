@@ -17,7 +17,7 @@ Durable paths are rooted at the nearest Git/worktree root; outside Git, use the 
 
 - `intent.md`: user meaning and unresolved meaning questions.
 - `discovery.md`: repo facts, constraints, validation paths, and unknowns.
-- `model.md`: the canonical Optimized Plan Contract from `feature-optimization-model.md`.
+- `model.md`: the compressed or deep constrained-optimization contract from `feature-optimization-model.md` or `deep-optimization-model.md`.
 - `guardrails.json`: machine-readable scope, constraints, validation requirements, and drift policy.
 - `plan.md`: execution contract: ordered steps, criteria, validation, evidence, stops, and continuation policy.
 - `progress.md`, `evidence.md`, `notes.md`: execution record, proof, and observations.
@@ -27,7 +27,7 @@ Run and loop approval requires a complete model, valid guardrails, and `plan.md`
 
 ## Transition Ownership
 
-- `guardrails set` validates the complete candidate before writing it.
+- `guardrails set` validates the complete candidate before writing it; `guardrails configure` applies validated flag-based patches.
 - `approve` enforces model-ready requirements and records the approval baseline.
 - `next` is the readiness authority: run checks pre-mutation scope; loop also checks replay, stop conditions, approval, and task state.
 - `task start` enforces continuation and pre-mutation readiness.

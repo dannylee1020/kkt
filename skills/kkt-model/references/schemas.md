@@ -33,7 +33,7 @@ optimized_plan:
       allowed_domain:
       chosen_value:
       rationale:
-  files_to_modify:
+  affected_surfaces:
     - path_or_surface:
       change_type:
       rationale:
@@ -48,10 +48,10 @@ optimized_plan:
         preference:
         source:
         status:
-  candidates:
+  candidate_feasibility:
     feasible:
     rejected:
-  selected_plan:
+  selected_optimum:
   binding_constraints:
   validation_plan:
   validation_proof:
@@ -134,6 +134,7 @@ execution_contract:
 
 ```yaml
 schema_version: 1
+contract_version: 2
 workspace_type: plan | model | run | loop
 profile: plan | model | run | loop
 status: initialized | modeling | approved | executing | validating | complete | blocked
@@ -168,10 +169,14 @@ method_invocations: []
 decision_log: []
 planning_contract:
   objective_function:
-  files_to_modify:
-  constraint_functions:
   decision_variables:
+  affected_surfaces:
+  constraint_functions:
+  candidate_feasibility:
+  selected_optimum:
+  binding_constraints:
   validation_proof:
+  files_to_modify: # legacy alias
 artifact_refs:
 approval:
   required: true

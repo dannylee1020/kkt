@@ -8,7 +8,7 @@ license: Apache-2.0
 
 Use this skill when the deliverable is a model, decision brief, or implementation-ready recommendation rather than code. It is for architecture choices, feature shaping, complex implementation options, scope negotiation, and high-impact tradeoffs.
 
-Read `references/kkt-kernel.md` and `references/feature-optimization-model.md` before acting. Read `references/layered-modeling-methods.md` when choosing methods, which is normal for deep modeling. Read `references/state-contract.md` when durable model state is useful. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during discovery. Read `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes.
+Read `references/kkt-kernel.md` and `references/deep-optimization-model.md` before acting. Read `references/layered-modeling-methods.md` when choosing methods, which is normal for deep modeling. Read `references/state-contract.md` when durable model state is useful. Read `references/plan-assimilation.md` only when prior plan text exists. Read `references/discovery-tooling.md` during discovery. Read `references/schemas.md` only when writing or auditing full state, guardrail, or layer-output shapes.
 
 ## Core Rule
 
@@ -24,6 +24,7 @@ kkt intent --method <goal_anti_goal|why_how|obstacle_questions|pairwise_question
 kkt discovery --method <naive|traceability_matrix|coupling_map|dsm_lite> "<repo facts and constraints>"
 kkt model --method <lexicographic|decision_tree|shortest_path|ordinal_mcda|pairwise_ahp|outranking> "<canonical Optimized Plan Contract>"
 kkt guardrails set '<complete constraints and path bounds JSON>'
+kkt guardrails configure --allowed '<paths>' --command '<validation command>'
 kkt done
 ```
 
@@ -38,12 +39,12 @@ If `kkt` is missing and durable model state is needed, stop and ask the user to 
 5. Separate explicit requirements, prior-plan assumptions, discovered facts, inferred constraints, assumptions, unknowns, and owner decisions.
 6. Build a discovery map when the decision crosses modules, workflows, contracts, or architecture boundaries.
 7. Select one intent method, one discovery method, and one modeling method from the layered catalog; record each with the matching `kkt ... --method` command. When no specialized method fits, use the fallback set (`goal_anti_goal`, `traceability_matrix`, `lexicographic`) and record why the fallback is sufficient instead of forcing an advanced method.
-8. Produce the canonical Optimized Plan Contract from `feature-optimization-model.md` at deep depth, using `Analysis Extensions` for method rationale, coupling, sensitivity, and unresolved owner decisions.
+8. Produce the deep Optimized Plan Contract from `deep-optimization-model.md`, using `Analysis Extensions` for method rationale, coupling, sensitivity, and unresolved owner decisions. The deep contract must preserve the full constrained-optimization kernel rather than becoming a narrative architecture brief.
 9. Produce 2-4 candidate models when meaningful alternatives exist; eliminate infeasible models before comparing feasible ones.
 10. Compare feasible models by hard-constraint satisfaction, binding constraints, blast radius, maintainability, validation clarity, reversibility, and fit with user intent.
 11. Ask the user only for unresolved owner decisions; otherwise select the best feasible model.
 12. Translate the selected model into guardrail variables: constraints, allowed paths, blocked paths, validation evidence, and required commands.
-13. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set`, and `kkt done`. `guardrails set` and `done` enforce their own contract checks; use diagnostics only to repair a block.
+13. Record durable output with `kkt intent --method`, `kkt discovery --method`, `kkt model --method`, `kkt guardrails set` or `kkt guardrails configure`, and `kkt done`. Both guardrail commands and `done` enforce their own contract checks; use diagnostics only to repair a block.
 
 ## End States
 
@@ -55,7 +56,7 @@ End with one of:
 
 For each serious alternative, include the method used, objective fit, decision-variable assignments, hard-constraint status, binding constraints, tradeoffs, execution-contract implications, residual risks, and when to choose it.
 
-Decision briefs must use the canonical Optimized Plan Contract from `references/feature-optimization-model.md` at deep depth.
+Decision briefs must use the deep Optimized Plan Contract from `references/deep-optimization-model.md`.
 
 ## Durable Output
 
