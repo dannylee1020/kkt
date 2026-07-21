@@ -194,13 +194,12 @@ OpenCode:    ask OpenCode to use the relevant kkt skill
 
 | workflow | use it for | what it produces | durable state |
 | --- | --- | --- | --- |
-| `$kkt` | normal feature work, bug fixes, and refactors | compressed constrained-optimization contract, approval, implementation, validation | none by default; optional `.kkt/kkt.yaml` only by explicit need |
-| `$kkt-model` | architecture choices and tradeoff analysis | deep constrained-optimization model with alternatives and sensitivity | `.kkt/model/<slug>/` |
-| `$kkt-run` | bounded implementation from a completed model | approved execution with deterministic drift checks | `.kkt/run/<slug>/` |
-| `$kkt-loop` | fresh long-running work or iterative execution of a completed model | durable workspace, progress, evidence, completion audit | `.kkt/loop/<slug>/` |
+| `$kkt` | normal feature work, bug fixes, and refactors | compact optimized plan and implementation | none by default |
+| `$kkt-model` | architecture choices and tradeoff analysis | detailed reusable model | `.kkt/model/<slug>/` |
+| `$kkt-run` | bounded implementation | approved execution with guardrails | `.kkt/run/<slug>/` |
+| `$kkt-loop` | long-running or iterative work | resumable execution and evidence | `.kkt/loop/<slug>/` |
 
-
-`$kkt-loop` owns continuation rather than a separate planning method. A fresh loop creates the shared model internally; a preplanned loop imports it with `kkt loop from-model [model-workspace]`. Both run and loop materialize their execution plan before approval; loops also materialize tasks and acceptance criteria before approval.
+Run and loop workflows require an approved execution plan. They can either model fresh work or import a completed model.
 
 kkt turns rough input into an intent frame:
 
@@ -222,17 +221,7 @@ plan output --> extract signals --> classify claims --> verify facts --> optimiz
 
 Plan claims do not become KKT facts until KKT verifies them or explicitly carries them as assumptions.
 
-Before edits, every selected model must preserve KKT's optimization kernel:
-
-- objective function
-- decision variables and affected surfaces
-- hard and soft constraint functions
-- feasible and rejected candidates
-- selected optimum
-- binding constraints
-- validation certificate required for completion
-
-Routine work uses a compressed contract. Architecture, high-risk, ambiguous, or materially multi-option work uses the deep contract.
+Before edits, every selected model must define its objective, constraints, feasible choice, selected plan, and validation proof. Routine work uses a compact contract; complex or high-risk work uses the deep contract.
 
 Expected final audit:
 
@@ -285,11 +274,11 @@ kkt hooks
 kkt hook
 ```
 
-Run `kkt help` for exact syntax. Transition commands enforce their own readiness checks: `approve` validates model readiness, `next` validates run mutation readiness and loop continuation, `task start` validates loop mutation readiness, and `done` validates finalization. Use `status`, `judge`, `guardrails validate`, and `replay` to diagnose a block rather than as required happy-path ceremony. `kkt start run` is the compact direct-execution workflow; use `kkt run from-model` when importing a completed model.
+Run `kkt help` for exact syntax. Workflow transitions enforce readiness automatically; use diagnostics when a transition is blocked. Use `kkt start run` for direct bounded execution or `kkt run from-model` to import a completed model.
 
-`kkt status --json` exposes the active layer map, contract version, validation and guardrail checks, loop replay state, task/criterion counts, evidence count, active stop conditions, and next action. Use `kkt guardrails configure` for validated flag-based updates such as `--allowed`, `--blocked`, `--command`, `--evidence`, `--acceptance`, `--stop`, `--block-on`, `--warn-on`, and `--mode`; raw `guardrails set` remains available for complete JSON contracts.
+`kkt status --json` provides machine-readable workflow state. `kkt guardrails configure` updates common guardrails without requiring a complete JSON contract.
 
-Ordinary `$kkt` tasks stay chat-first by default. They still apply constrained optimization; only the representation is compressed. Durable workflow state, when used, lives under the project root's `.kkt/`; deeper `model`, `run`, and `loop` workflows use that directory for artifacts, guardrails, evidence, and replayable progress. Discovery still uses normal agent tools such as search, shell commands, and repo-native language tooling rather than a KKT-specific discovery command.
+Ordinary `$kkt` tasks stay chat-first. Durable workflows store their state, guardrails, and evidence under the project root's `.kkt/` directory.
 
 ## Hooks
 
