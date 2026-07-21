@@ -22,7 +22,7 @@ Usage:
 Installs KKT skills, ast-grep, and the companion kkt CLI used for optional and durable workflow state.
 
 Common options:
-  --target <name>   auto | codex | claude | pi | opencode | all
+  --target <name>   Override auto-detection: codex | claude | pi | opencode | all
   --local [path]    Install to project-local skill directories. Defaults to cwd.
   --dir <path>      Install to an explicit skill root directory.
   --bin-dir <path>  Install the kkt CLI here. Defaults to ~/.local/bin.
@@ -43,7 +43,7 @@ Environment:
 Hook adapters are opt-in and no-op by default. They call `kkt hook ...`, which only enforces
 when the current project has an armed `.kkt/hooks.json`.
 
-Default install auto-detects supported coding agents and writes to:
+By default, install and upgrade auto-detect every supported coding agent available on the system and write to:
   ~/.agents/skills   (Codex, Pi, OpenCode)
   ~/.claude/skills   (Claude Code)
 EOF
@@ -217,7 +217,7 @@ resolve_targets() {
         fi
       done
       if [ "${#resolved_targets[@]}" -eq 0 ]; then
-        fail "No supported coding agent was detected. Rerun with --target codex, --target claude, --target pi, --target opencode, or --target all."
+        fail "No supported coding agent was detected. Specify --target codex, --target claude, --target pi, --target opencode, or --target all to override auto-detection."
       fi
       ;;
     all)

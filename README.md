@@ -18,12 +18,12 @@ kkt applies [constrained optimization](https://en.wikipedia.org/wiki/Constrained
 ## How It Works
 
 ```text
-Without KKT:
+Without kkt:
 
 request --> agent --> plan --> edits --> validation
 
 
-With KKT:
+With kkt:
 
 request --> agent --> kkt(optimization modeling) --> edits --> validation
                                  |
@@ -67,27 +67,25 @@ kkt does not implement a literal numerical solver. It borrows the discipline of 
 Recommended install:
 
 ```bash
-npx @dannylee1020/kkt install --target all
+npx @dannylee1020/kkt install
 ```
 
-This installs kkt skills for every supported agent it can find:
+This automatically detects all supported agents available on your system and installs the kkt skills for each one:
 
 - Claude Code: `~/.claude/skills`
 - Codex, Pi, and OpenCode: `~/.agents/skills`
 
-Install for one agent instead:
+Upgrade kkt with the same automatic detection:
+
+```bash
+npx @dannylee1020/kkt upgrade
+```
+
+To target one agent explicitly, use `--target` as an override:
 
 ```bash
 npx @dannylee1020/kkt install --target claude
-npx @dannylee1020/kkt install --target codex
-npx @dannylee1020/kkt install --target pi
-npx @dannylee1020/kkt install --target opencode
-```
-
-Upgrade kkt:
-
-```bash
-npx @dannylee1020/kkt upgrade --target all
+npx @dannylee1020/kkt upgrade --target codex
 ```
 
 Choose a CLI install location:
@@ -110,7 +108,7 @@ curl -fsSL https://raw.githubusercontent.com/dannylee1020/kkt/main/scripts/insta
 
 The CLI uses a release binary when available, or builds from source with Go. Use `KKT_VERSION` to pin a release tag, or `KKT_BINARY_URL` to install from an explicit binary URL.
 
-## Why KKT
+## Why kkt
 
 Most coding-agent workflows turn a request into a plan. That helps, but it carries risk: the plan focuses on what to change, not what must stay unchanged.
 
@@ -213,13 +211,13 @@ explicit user constraints
 
 The user does not need to provide all of this upfront. Repo constraints, affected files, and validation paths are discovered from the codebase when possible and marked as assumptions when needed.
 
-When KKT is invoked after a prior plan, it treats the plan as untrusted scaffold:
+When kkt is invoked after a prior plan, it treats the plan as untrusted scaffold:
 
 ```text
-plan output --> extract signals --> classify claims --> verify facts --> optimize KKT model
+plan output --> extract signals --> classify claims --> verify facts --> optimize kkt model
 ```
 
-Plan claims do not become KKT facts until KKT verifies them or explicitly carries them as assumptions.
+Plan claims do not become kkt facts until it verifies them or explicitly carries them as assumptions.
 
 Before edits, every selected model must define its objective, constraints, feasible choice, selected plan, and validation proof. Routine work uses a compact contract; complex or high-risk work uses the deep contract.
 
@@ -282,7 +280,7 @@ Ordinary `$kkt` tasks stay chat-first. Durable workflows store their state, guar
 
 ## Hooks
 
-Coding agents such as Codex, Claude Code, Pi, and OpenCode can run hooks around tool use. KKT's hook adapters plug into those agent hook systems so an approved `run` or `loop` workspace can enforce its guardrail boundaries while the agent is editing.
+Coding agents can run hooks around tool use. kkt's hook adapters plug into those agent hook systems so an approved `run` or `loop` workspace can enforce its guardrail boundaries while the agent is editing.
 
 Before and after tool execution, the adapter asks the current project whether the proposed or actual file mutation stays inside modeled `allowed_paths` and away from `blocked_paths`. If hooks are not installed or not armed, normal agent behavior is unchanged. If hooks are armed, out-of-scope edits can be blocked deterministically instead of relying only on the agent to remember checkpoints.
 
