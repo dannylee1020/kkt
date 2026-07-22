@@ -3,3 +3,4 @@ dist/
 .kkt/
 .npmrc
 *.tgz
+Taskfile.yaml
