@@ -8,18 +8,22 @@ type KktHookResult = {
 };
 
 async function runKktHook(pi: ExtensionAPI, event: "pre-tool" | "post-tool", payload: unknown, cwd: string, signal?: AbortSignal): Promise<KktHookResult> {
-  const result = await pi.exec("kkt", ["hook", event, "--agent", "pi", "--json", JSON.stringify(payload)], {
-    cwd,
-    signal,
-    timeout: 5000,
-  });
-  if (result.code !== 0) {
-    return { verdict: "allow", reason: "kkt hook unavailable" };
-  }
   try {
-    return JSON.parse(result.stdout || "{}") as KktHookResult;
+    const result = await pi.exec("kkt", ["hook", event, "--agent", "pi", "--json", JSON.stringify(payload)], {
+      cwd,
+      signal,
+      timeout: 5000,
+    });
+    if (result.code !== 0) {
+      return { verdict: "allow", reason: "kkt hook unavailable" };
+    }
+    try {
+      return JSON.parse(result.stdout || "{}") as KktHookResult;
+    } catch {
+      return { verdict: "allow", reason: "kkt hook returned invalid JSON" };
+    }
   } catch {
-    return { verdict: "allow", reason: "kkt hook returned invalid JSON" };
+    return { verdict: "allow", reason: "kkt hook unavailable" };
   }
 }
 

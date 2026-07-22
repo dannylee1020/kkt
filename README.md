@@ -285,7 +285,24 @@ Coding agents can run hooks around tool use. kkt's hook adapters plug into those
 Before and after tool execution, the adapter asks the current project whether the proposed or actual file mutation stays inside modeled `allowed_paths` and away from `blocked_paths`. If hooks are not installed or not armed, normal agent behavior is unchanged. If hooks are armed, out-of-scope edits can be blocked deterministically instead of relying only on the agent to remember checkpoints.
 
 > [!WARNING]
-> Hooks are beta and installed separately because they modify coding-agent runtime behavior. 
+> Hooks are beta and installed separately because they modify coding-agent runtime behavior.
+
+## Testing hook adapters
+
+Run the isolated installer matrix with:
+
+```sh
+task test-install-hooks
+```
+
+Run real-runtime enforcement tests with an installed agent runtime:
+
+```sh
+task test-runtime-hooks RUNTIME=pi
+task test-runtime-hooks RUNTIME=opencode
+```
+
+The runtime runner builds the local `kkt` binary, uses an isolated temporary project, and drives a local deterministic model server. OpenCode is installed through `npx` at version `1.18.4` when it is not already available.
 
 ## License
 
